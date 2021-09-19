@@ -68,10 +68,13 @@ characterName =
     <|> literal "vtab" $> '\v'
 
 dSymbol :: Parser String
-dSymbol = lexeme $ do
-  i <- initial
-  s <- many subsequent
-  return (i : s)
+dSymbol =
+  lexeme $
+    (:) <$> initial <*> many subsequent
+      <|> symbol "+"
+      <|> symbol "-"
+      <|> symbol "..."
+      <|> ((++) <$> literal "->" <*> many subsequent)
   where
     initial = alpha <|> oneOf "!$%&*/:<=>?~_^"
     subsequent = initial <|> digit <|> oneOf ".+-@"
