@@ -1,11 +1,10 @@
 module Main where
 
 import Control.Monad (when)
-import Grammar.Program (program, form)
-import Parsing (Parser (parse))
+import Lib (EvalError, eval)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (hFlush, hPutStrLn, stderr, stdout)
+import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
 
 data Args
   = Args
@@ -35,7 +34,7 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " --help"
 
 exitWithMessage :: String -> IO ()
-exitWithMessage msg = hPutStrLn stderr msg >> exitWith (ExitFailure 84)
+exitWithMessage msg = ePutStrLn msg >> exitWith (ExitFailure 84)
 
 parseArgs :: Args -> [String] -> IO (Maybe Args)
 parseArgs _ ("-h" : _) = return $ Just Help
@@ -52,20 +51,18 @@ runWithArgs [] False = return ()
 runWithArgs [] True = repl
 runWithArgs (path : paths) i = do
   src <- readFile path
-  case parse program src of
-    Just (v, []) -> print v
-    Just (v, r) -> print v >> putStr "Unparsed input: " >> putStrLn r
-    Nothing -> hPutStrLn stderr "Syntax error!"
-    >> runWithArgs paths i
+  case eval src of
+    Left e -> ePrint e
+    Right v -> putStr path >> putStr " -> " >> print v
+  runWithArgs paths i
 
 repl :: IO ()
 repl = do
   line <- prompt >> getLine
   when (line /= "exit") $
-    case parse form line of
-      Just (v, []) -> print v
-      Just (v, r) -> print v >> putStr "Unparsed input: " >> putStrLn r
-      Nothing -> hPutStrLn stderr "Syntax error!"
+    case eval line of
+      Left e -> ePrint e
+      Right v -> print v
       >> repl
 
 prompt :: IO ()
@@ -73,3 +70,12 @@ prompt = putStr "> " >> flushStdout
 
 flushStdout :: IO ()
 flushStdout = hFlush stdout
+
+ePutStr :: String -> IO ()
+ePutStr = hPutStr stderr
+
+ePutStrLn :: String -> IO ()
+ePutStrLn = hPutStrLn stderr
+
+ePrint :: EvalError -> IO ()
+ePrint = hPrint stderr

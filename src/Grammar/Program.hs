@@ -6,7 +6,6 @@ module Grammar.Program
     Constant (..),
     Formals (..),
     program,
-    form,
   )
 where
 
