@@ -1,8 +1,8 @@
 module Main where
 
-import Control.Monad (when)
+import Control.Monad (void)
 import Grammar.Datum (display)
-import Lib (EvalError, eval)
+import Lib (Context, EvalError, newContext, sEval)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
@@ -21,7 +21,7 @@ main :: IO ()
 main = do
   args <- getArgs >>= parseArgs defaultArgs
   case args of
-    Just (Args files i) -> runWithArgs files (i || null files)
+    Just (Args files i) -> void $ runWithArgs newContext files (i || null files)
     Just Help -> printUsage
     Nothing -> exitWithMessage "Invalid arguments."
 
@@ -47,24 +47,24 @@ parseArgs (Args files i) (file : xs) =
   parseArgs (Args {sourceFiles = files ++ [file], interactive = i}) xs
 parseArgs args _ = return $ Just args
 
-runWithArgs :: [String] -> Bool -> IO ()
-runWithArgs [] False = return ()
-runWithArgs [] True = repl
-runWithArgs (path : paths) i = do
+runWithArgs :: Context -> [String] -> Bool -> IO Context
+runWithArgs c [] False = return c
+runWithArgs c [] True = repl c
+runWithArgs c (path : paths) i = do
   src <- readFile path
-  case eval src of
-    Left e -> ePrint e
-    Right v -> putStr path >> putStr " -> " >> putStrLn (display v)
-  runWithArgs paths i
+  case sEval c src of
+    Left e -> ePrint e >> return c
+    Right (_, c') -> runWithArgs c' paths i
 
-repl :: IO ()
-repl = do
+repl :: Context -> IO Context
+repl c = do
   line <- prompt >> getLine
-  when (line /= "exit") $
-    case eval line of
-      Left e -> ePrint e
-      Right v -> putStrLn $ display v
-      >> repl
+  if line == "exit"
+    then return c
+    else case sEval c line of
+      Left e -> ePrint e >> repl c
+      Right (Just v, c') -> putStrLn (display v) >> repl c'
+      Right (_, c') -> repl c'
 
 prompt :: IO ()
 prompt = putStr "> " >> flushStdout
