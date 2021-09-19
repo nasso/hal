@@ -1,7 +1,7 @@
 module Main where
 
 import Control.Monad (when)
-import Grammar (datum)
+import Grammar.Program (program, form)
 import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -52,7 +52,7 @@ runWithArgs [] False = return ()
 runWithArgs [] True = repl
 runWithArgs (path : paths) i = do
   src <- readFile path
-  case parse datum src of
+  case parse program src of
     Just (v, []) -> print v
     Just (v, r) -> print v >> putStr "Unparsed input: " >> putStrLn r
     Nothing -> hPutStrLn stderr "Syntax error!"
@@ -62,7 +62,7 @@ repl :: IO ()
 repl = do
   line <- prompt >> getLine
   when (line /= "exit") $
-    case parse datum line of
+    case parse form line of
       Just (v, []) -> print v
       Just (v, r) -> print v >> putStr "Unparsed input: " >> putStrLn r
       Nothing -> hPutStrLn stderr "Syntax error!"
