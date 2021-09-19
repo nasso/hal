@@ -144,3 +144,7 @@ chainr1 p op = scan
   where
     scan = p <**> rst
     rst = (flip <$> op <*> scan) <|> pure id
+
+-- | Parse a value wrapped in parentheses or square brackets.
+paren :: Parser a -> Parser a
+paren p = symbol "(" *> p <* symbol ")" <|> symbol "[" *> p <* symbol "]"

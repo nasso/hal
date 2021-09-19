@@ -1,6 +1,11 @@
-module Grammar
+module Grammar.Datum
   ( datum,
     Datum (..),
+    dBoolean,
+    dNumber,
+    dCharacter,
+    dString,
+    dSymbol,
   )
 where
 
@@ -8,7 +13,20 @@ import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Data.Char (GeneralCategory (Space), chr, generalCategory)
 import Data.Functor (($>))
 import Numeric (readHex)
-import Parsing (Parser, alpha, char, digit, getc, lexeme, literal, match, noneOf, oneOf, symbol)
+import Parsing
+  ( Parser,
+    alpha,
+    char,
+    digit,
+    getc,
+    lexeme,
+    literal,
+    match,
+    noneOf,
+    oneOf,
+    paren,
+    symbol,
+  )
 
 -- | Represents a Scheme data value.
 data Datum
@@ -23,24 +41,18 @@ data Datum
 
 datum :: Parser Datum
 datum =
-  lexeme $
-    Boolean <$> dBoolean
-      <|> Character <$> dCharacter
-      <|> Symbol <$> dSymbol
-      <|> String <$> dString
-      <|> Number <$> dNumber
-      <|> dList
-
-paren :: Parser a -> Parser a
-paren p =
-  char '(' *> p <* char ')'
-    <|> char '[' *> p <* char ']'
+  Boolean <$> dBoolean
+    <|> Character <$> dCharacter
+    <|> Symbol <$> dSymbol
+    <|> String <$> dString
+    <|> Number <$> dNumber
+    <|> dList
 
 dBoolean :: Parser Bool
-dBoolean = symbol "#t" $> True <|> symbol "#f" $> False
+dBoolean = lexeme $ symbol "#t" $> True <|> symbol "#f" $> False
 
 dCharacter :: Parser Char
-dCharacter = literal "#\\" >> (characterName <|> getc)
+dCharacter = lexeme $ literal "#\\" >> (characterName <|> getc)
 
 characterName :: Parser Char
 characterName =
@@ -56,7 +68,7 @@ characterName =
     <|> literal "vtab" $> '\v'
 
 dSymbol :: Parser String
-dSymbol = do
+dSymbol = lexeme $ do
   i <- initial
   s <- many subsequent
   return (i : s)
@@ -65,7 +77,7 @@ dSymbol = do
     subsequent = initial <|> digit <|> oneOf ".+-@"
 
 dString :: Parser String
-dString = char '"' *> many strElem <* char '"'
+dString = lexeme $ char '"' *> many strElem <* char '"'
   where
     strElem =
       (noneOf "\"\\" <|> escapeSequence <|> unicodeLiteral)
@@ -113,7 +125,7 @@ intralineWhitespace :: Parser Char
 intralineWhitespace = match ((==) Space . generalCategory)
 
 dNumber :: Parser Double
-dNumber = do
+dNumber = lexeme $ do
   n <- read <$> some digit
   d <- fraction <|> return 0.0
   e <- numExponent <|> return 0
