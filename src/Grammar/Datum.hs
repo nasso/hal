@@ -6,6 +6,7 @@ module Grammar.Datum
     dCharacter,
     dString,
     dSymbol,
+    display,
   )
 where
 
@@ -38,6 +39,39 @@ data Datum
   | Cons Datum Datum
   | Empty
   deriving (Eq, Show)
+
+display :: Datum -> String
+display (Cons (Symbol "quote") (Cons v Empty)) = "'" ++ display v
+display (Cons (Symbol "quasiquote") (Cons v Empty)) = "`" ++ display v
+display (Cons (Symbol "unquote") (Cons v Empty)) = "," ++ display v
+display (Cons (Symbol "unquote-splicing") (Cons v Empty)) = ",@" ++ display v
+display (Cons (Symbol "syntax") (Cons v Empty)) = "#'" ++ display v
+display (Cons (Symbol "quasisyntax") (Cons v Empty)) = "#`" ++ display v
+display (Cons (Symbol "unsyntax") (Cons v Empty)) = "#," ++ display v
+display (Cons (Symbol "unsyntax-splicing") (Cons v Empty)) = "#,@" ++ display v
+display (Boolean True) = "#t"
+display (Boolean False) = "#f"
+display (Number n) = show n
+display (Character '\x0007') = "#\\alarm"
+display (Character '\x0008') = "#\\backspace"
+display (Character '\x007f') = "#\\delete"
+display (Character '\x001b') = "#\\esc"
+display (Character '\x000a') = "#\\newline"
+display (Character '\x000c') = "#\\page"
+display (Character '\x000d') = "#\\return"
+display (Character ' ') = "#\\space"
+display (Character '\t') = "#\\tab"
+display (Character '\v') = "#\\vtab"
+display (Character c) = "#\\" ++ [c]
+display (String s) = show s
+display (Symbol s) = s
+display (Cons car cdr) = "(" ++ display car ++ expand cdr ++ ")"
+  where
+    expand :: Datum -> String
+    expand Empty = ""
+    expand (Cons car' cdr') = " " ++ display car' ++ expand cdr'
+    expand d = " . " ++ display d
+display Empty = "()"
 
 datum :: Parser Datum
 datum =
