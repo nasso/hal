@@ -1,6 +1,7 @@
 module Main where
 
 import Control.Monad (when)
+import Grammar.Datum (display)
 import Lib (EvalError, eval)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -53,7 +54,7 @@ runWithArgs (path : paths) i = do
   src <- readFile path
   case eval src of
     Left e -> ePrint e
-    Right v -> putStr path >> putStr " -> " >> print v
+    Right v -> putStr path >> putStr " -> " >> putStrLn (display v)
   runWithArgs paths i
 
 repl :: IO ()
@@ -62,7 +63,7 @@ repl = do
   when (line /= "exit") $
     case eval line of
       Left e -> ePrint e
-      Right v -> print v
+      Right v -> putStrLn $ display v
       >> repl
 
 prompt :: IO ()

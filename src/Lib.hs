@@ -15,6 +15,7 @@ data EvalError
 
 eval :: String -> Either EvalError Datum
 eval src = case parse (many datum) src of
-  Just (v, "") -> Right $ last v
+  Just ([], _) -> Left SyntaxError
   Nothing -> Left SyntaxError
+  Just (v, "") -> Right $ last v
   Just (v, e) -> Left $ Extra (last v) e
