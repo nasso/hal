@@ -1,7 +1,6 @@
 module Main where
 
 import Control.Monad (void)
-import Grammar.Datum (display)
 import Lib (Context, EvalError, newContext, sEval)
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -63,7 +62,7 @@ repl c = do
     then return c
     else case sEval c line of
       Left e -> ePrint e >> repl c
-      Right (Just v, c') -> putStrLn (display v) >> repl c'
+      Right (Just v, c') -> print v >> repl c'
       Right (_, c') -> repl c'
 
 prompt :: IO ()
