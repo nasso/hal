@@ -1,7 +1,9 @@
 module Main where
 
 import Control.Monad (void)
-import Lib (Context, EvalError, newContext, sEval)
+import Eval
+import Grammar.Datum (datum)
+import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
@@ -46,30 +48,31 @@ parseArgs (Args files i) (file : xs) =
   parseArgs (Args {sourceFiles = files ++ [file], interactive = i}) xs
 parseArgs args _ = return $ Just args
 
-runWithArgs :: Context -> [String] -> Bool -> IO Context
-runWithArgs c [] False = return c
+execute :: String -> Eval Value
+execute s = case parse datum s of
+  Just (d, "") -> eval d
+  _ -> throw SyntaxError
+
+runWithArgs :: Context -> [String] -> Bool -> IO ()
+runWithArgs _ [] False = return ()
 runWithArgs c [] True = repl c
 runWithArgs c (path : paths) i = do
   src <- readFile path
-  case sEval c src of
-    Left e -> ePrint e >> return c
+  case apply (execute src) c of
+    Left e -> ePrint e
     Right (_, c') -> runWithArgs c' paths i
 
-repl :: Context -> IO Context
+repl :: Context -> IO ()
 repl c = do
   line <- prompt >> getLine
   if line == "exit"
-    then return c
-    else case sEval c line of
+    then return ()
+    else case apply (execute line) c of
       Left e -> ePrint e >> repl c
-      Right (Just v, c') -> print v >> repl c'
-      Right (_, c') -> repl c'
+      Right (d, c') -> print d >> repl c'
 
 prompt :: IO ()
-prompt = putStr "> " >> flushStdout
-
-flushStdout :: IO ()
-flushStdout = hFlush stdout
+prompt = putStr "> " >> hFlush stdout
 
 ePutStr :: String -> IO ()
 ePutStr = hPutStr stderr

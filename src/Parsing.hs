@@ -56,12 +56,10 @@ instance Alternative Parser where
 
 -- | Parse a single character.
 getc :: Parser Char
-getc =
-  Parser
-    ( \s -> case s of
-        (x : xs) -> Just (x, xs)
-        "" -> Nothing
-    )
+getc = Parser r
+  where
+    r [] = Nothing
+    r (c : cs) = Just (c, cs)
 
 -- | Parse a single character satisfying the given predicate.
 match :: (Char -> Bool) -> Parser Char
