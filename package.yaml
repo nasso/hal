@@ -22,6 +22,7 @@ description:
 
 dependencies:
   - base >= 4.7 && < 5
+  - containers >= 0.6 && < 0.7
 
 library:
   source-dirs: src
