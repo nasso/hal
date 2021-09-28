@@ -1,7 +1,7 @@
 module Eval
   ( newContext,
+    form,
     eval,
-    apply,
     throw,
     EvalError (..),
     Eval,
@@ -33,30 +33,32 @@ data EvalError
 newContext :: Context
 newContext = Map.empty
 
-newtype Eval a = Eval {apply :: Context -> Either EvalError (a, Context)}
+newtype Eval a = Eval
+  { eval :: Context -> Either EvalError (a, Context)
+  }
 
 instance Functor Eval where
-  fmap f a = Eval $ \c -> case apply a c of
+  fmap f a = Eval $ \c -> case eval a c of
     Left e -> Left e
     Right (v, c') -> Right (f v, c')
 
 instance Applicative Eval where
   pure a = Eval $ \c -> Right (a, c)
-  f <*> a = Eval $ \c -> case apply f c of
+  f <*> a = Eval $ \c -> case eval f c of
     Left e -> Left e
-    Right (f', c') -> case apply a c' of
+    Right (f', c') -> case eval a c' of
       Left e -> Left e
       Right (a', c'') -> Right (f' a', c'')
 
 instance Monad Eval where
-  a >>= f = Eval $ \c -> case apply a c of
+  a >>= f = Eval $ \c -> case eval a c of
     Left e -> Left e
-    Right (a', c') -> apply (f a') c'
+    Right (a', c') -> eval (f a') c'
 
 instance Alternative Eval where
   empty = Eval $ \_ -> Left SyntaxError
-  a <|> b = Eval $ \c -> case apply a c of
-    Left _ -> apply b c
+  a <|> b = Eval $ \c -> case eval a c of
+    Left _ -> eval b c
     Right a' -> Right a'
 
 throw :: EvalError -> Eval a
@@ -76,12 +78,12 @@ fetch name = Eval $ \c -> case Map.lookup name c of
 isDefined :: String -> Eval Bool
 isDefined name = Eval $ \c -> Right (Map.member name c, c)
 
-eval :: Datum -> Eval Value
-eval v = definition v <|> expression v
+form :: Datum -> Eval Value
+form v = definition v <|> expression v
 
 definition :: Datum -> Eval Value
 definition (Cons (Symbol "define") (Cons (Symbol s) (Cons e Empty))) =
-  define s =<< eval e
+  define s =<< form e
 definition (Cons (Symbol "begin") v) = evalProper v
   where
     evalProper Empty = return $ Datum Empty
@@ -134,14 +136,14 @@ builtin "lambda" (formals : body : bodies) =
     sym (Symbol s) = return s
     sym _ = empty
 builtin "if" [expr, then', else'] = do
-  v <- eval expr
+  v <- form expr
   if v == Datum (Boolean False)
-    then eval else'
-    else eval then'
+    then form else'
+    else form then'
 builtin "set!" [Symbol var, expr] = do
   exists <- isDefined var
   if exists
-    then eval expr >>= define var
+    then form expr >>= define var
     else empty
 builtin _ _ = empty
 
@@ -151,6 +153,6 @@ collect v = ([], v)
 
 call :: Formals -> [Datum] -> [Datum] -> Eval Value
 call _ [] _ = raise $ String "Attempt to call a procedure with no body"
-call (Exact []) [body] [] = eval body
-call (Exact []) (body : bodies) [] = eval body >> call (Exact []) bodies []
+call (Exact []) [body] [] = form body
+call (Exact []) (body : bodies) [] = form body >> call (Exact []) bodies []
 call _ _ _ = raise $ String "Not implemented"

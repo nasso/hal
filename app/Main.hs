@@ -50,7 +50,7 @@ parseArgs args _ = return $ Just args
 
 execute :: String -> Eval Value
 execute s = case parse datum s of
-  Just (d, "") -> eval d
+  Just (d, "") -> form d
   _ -> throw SyntaxError
 
 runWithArgs :: Context -> [String] -> Bool -> IO ()
@@ -58,7 +58,7 @@ runWithArgs _ [] False = return ()
 runWithArgs c [] True = repl c
 runWithArgs c (path : paths) i = do
   src <- readFile path
-  case apply (execute src) c of
+  case eval (execute src) c of
     Left e -> ePrint e
     Right (_, c') -> runWithArgs c' paths i
 
@@ -67,7 +67,7 @@ repl c = do
   line <- prompt >> getLine
   if line == "exit"
     then return ()
-    else case apply (execute line) c of
+    else case eval (execute line) c of
       Left e -> ePrint e >> repl c
       Right (d, c') -> print d >> repl c'
 
