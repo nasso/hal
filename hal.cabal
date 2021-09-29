@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 42e42141bc213250ab57982ee12def5cd9ff3360ab37ead9673b5f5a4844ee32
+-- hash: 344ff76028488751b73cbc5187b0897a138763b7fa0ebe71b6b0c042cce3f59a
 
 name:           hal
 version:        0.1.0.0
@@ -28,8 +28,7 @@ source-repository head
 library
   exposed-modules:
       Eval
-      Grammar.Datum
-      Grammar.Program
+      Grammar
       Lib
       Parsing
   other-modules:
