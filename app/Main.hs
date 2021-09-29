@@ -1,8 +1,9 @@
 module Main where
 
+import Control.Applicative
 import Control.Monad (void)
 import Eval
-import Grammar.Datum (datum)
+import Grammar.Datum (Datum, datum)
 import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -48,28 +49,35 @@ parseArgs (Args files i) (file : xs) =
   parseArgs (Args {sourceFiles = files ++ [file], interactive = i}) xs
 parseArgs args _ = return $ Just args
 
-execute :: String -> Eval Value
-execute s = case parse datum s of
-  Just (d, "") -> form d
-  _ -> throw SyntaxError
+execute ::
+  Eval a ->
+  String ->
+  Context ->
+  Either SyntaxError (EvalResult a, Context, [Datum])
+execute e s c = case parse (many datum) s of
+  Just (d, "") -> eval e d c
+  _ -> Left $ SyntaxError "Syntax error"
 
 runWithArgs :: Context -> [String] -> Bool -> IO ()
 runWithArgs _ [] False = return ()
 runWithArgs c [] True = repl c
 runWithArgs c (path : paths) i = do
   src <- readFile path
-  case eval (execute src) c of
+  case execute program src c of
     Left e -> ePrint e
-    Right (_, c') -> runWithArgs c' paths i
+    Right (_, c', []) -> runWithArgs c' paths i
+    _ -> ePrint "Extra input"
 
 repl :: Context -> IO ()
 repl c = do
   line <- prompt >> getLine
   if line == "exit"
     then return ()
-    else case eval (execute line) c of
+    else case execute form line c of
       Left e -> ePrint e >> repl c
-      Right (d, c') -> print d >> repl c'
+      Right (Ok d, c', []) -> print d >> repl c'
+      Right (Exception e, c', []) -> ePrint e >> repl c'
+      Right (_, _, i) -> ePutStrLn ("Extra input: " ++ show i) >> repl c
 
 prompt :: IO ()
 prompt = putStr "> " >> hFlush stdout
@@ -80,5 +88,5 @@ ePutStr = hPutStr stderr
 ePutStrLn :: String -> IO ()
 ePutStrLn = hPutStrLn stderr
 
-ePrint :: EvalError -> IO ()
+ePrint :: Show a => a -> IO ()
 ePrint = hPrint stderr
