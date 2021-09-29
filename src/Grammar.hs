@@ -1,4 +1,4 @@
-module Grammar.Datum
+module Grammar
   ( datum,
     Datum (..),
     dBoolean,

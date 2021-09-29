@@ -18,7 +18,7 @@ import Control.Monad
 import Data.Functor
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Grammar.Datum (Datum (..))
+import Grammar (Datum (..))
 
 data Formals = Exact [String] | Variadic [String] String deriving (Show, Eq)
 

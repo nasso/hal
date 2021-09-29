@@ -3,7 +3,7 @@ module Main where
 import Control.Applicative
 import Control.Monad (void)
 import Eval
-import Grammar.Datum (Datum, datum)
+import Grammar (Datum, datum)
 import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
