@@ -65,8 +65,14 @@ fetch s = Eval $ \ds c ->
     Just v -> Right (Ok v, c, ds)
     Nothing -> Left $ SyntaxError $ "Undefined variable: " ++ s
 
+define :: String -> Value -> Eval ()
+define s v = Eval $ \ds c -> Right (Ok (), Map.insert s v c, ds)
+
 store :: String -> Value -> Eval ()
-store s v = Eval $ \ds c -> Right (Ok (), Map.insert s v c, ds)
+store s v = Eval $ \ds c ->
+  if Map.member s c
+    then Right (Ok (), Map.insert s v c, ds)
+    else Right (Exception $ Symbol "&undefined", c, ds)
 
 syntaxError :: String -> Eval a
 syntaxError s = Eval $ \_ _ -> Left $ SyntaxError s
@@ -188,6 +194,12 @@ improperList = do
       return (a : a', b')
     l -> return ([a], l)
 
+improperWrap :: Eval (Eval a) -> Eval a
+improperWrap a = do
+  (h, t) <- improperList
+  f <- reval (a <* end) h
+  reval (f <* end) [t]
+
 properList :: Eval [Datum]
 properList =
   nil $> []
@@ -202,28 +214,63 @@ properWrap a = properList >>= reval (a <* end)
 program :: Eval ()
 program = void $ many form
 
-form :: Eval Value
-form = definition <|> expression
+form :: Eval (Maybe Value)
+form = definition $> Nothing <|> Just <$> expression
 
-definition :: Eval Value
-definition = variableDefinition
+definition :: Eval ()
+definition =
+  variableDefinition
+    <|> properWrap (symbol "begin" >> many definition $> ())
 
-variableDefinition :: Eval Value
+variableDefinition :: Eval ()
 variableDefinition = properWrap $ do
   _ <- symbol "define"
   v <- variable
   e <- expression
-  store v e
-  return (Datum $ Symbol v)
+  define v e
 
 expression :: Eval Value
 expression =
   Datum <$> constant
     <|> (variable >>= fetch)
-    <|> properWrap (quote <|> branch)
+    <|> properWrap (quote <|> lambda <|> branch <|> assignment <|> application)
 
 quote :: Eval Value
 quote = Datum <$> (symbol "quote" >> getd)
+
+lambda :: Eval Value
+lambda = do
+  _ <- symbol "lambda"
+  params <- formals
+  bodies <- some getd
+  return $ Procedure params bodies
+
+formals :: Eval Formals
+formals =
+  Variadic [] <$> variable
+    <|> Exact <$> properWrap (many variable)
+    <|> improperWrap
+      ( do
+          vars <- some variable
+          return $ Variadic vars <$> variable
+      )
+
+assignment :: Eval Value
+assignment =
+  symbol "set!" >> do
+    v <- variable
+    e <- expression
+    store v e
+    return e
+
+application :: Eval Value
+application = do
+  e <- expression
+  proc' <- case e of
+    Procedure for das -> return $ apply for das
+    _ -> raise $ Symbol "&error (not a procedure)"
+  args <- many expression
+  proc' args
 
 branch :: Eval Value
 branch =
@@ -233,92 +280,8 @@ branch =
       then expression <* getd
       else getd *> expression
 
--- define :: String -> Value -> Eval Value
--- define name value = Eval $ \c -> Right (value, Map.insert name value c)
---
--- fetch :: String -> Eval Value
--- fetch name = Eval $ \c -> case Map.lookup name c of
---   Nothing -> Left . Exception . String $ "Unbound identifier: " ++ name
---   Just v -> Right (v, c)
---
--- isDefined :: String -> Eval Bool
--- isDefined name = Eval $ \c -> Right (Map.member name c, c)
---
--- form :: Datum -> Eval Value
--- form v = definition v <|> expression v
---
--- definition :: Datum -> Eval Value
--- definition (Cons (Symbol "define") (Cons (Symbol s) (Cons e Empty))) =
---   define s =<< form e
--- definition (Cons (Symbol "begin") v) = evalProper v
---   where
---     evalProper Empty = return $ Datum Empty
---     evalProper (Cons e es) = definition e >> evalProper es
---     evalProper _ = empty
--- definition _ = empty
---
--- expression :: Datum -> Eval Value
--- expression (Boolean b) = return $ Datum $ Boolean b
--- expression (Number n) = return $ Datum $ Number n
--- expression (Character c) = return $ Datum $ Character c
--- expression (String s) = return $ Datum $ String s
--- expression (Symbol s) = fetch s
--- expression (Cons (Symbol s) exprs) =
---   do
---     args <- collectProper exprs
---     do
---       p <- fetch s
---       case p of
---         Procedure params bodies -> call params bodies args
---         _ -> empty
---       <|> builtin s args
--- expression (Cons pexpr exprs) =
---   do
---     args <- collectProper exprs
---     do
---       p <- expression pexpr
---       case p of
---         Procedure params bodies -> call params bodies args
---         _ -> empty
--- expression _ = empty
---
--- collectProper :: Datum -> Eval [Datum]
--- collectProper Empty = return []
--- collectProper (Cons x xs) = (x :) <$> collectProper xs
--- collectProper _ = empty
---
--- builtin :: String -> [Datum] -> Eval Value
--- builtin "quote" [v] = return $ Datum v
--- builtin "lambda" (Symbol args : body : bodies) =
---   return $ Procedure (Variadic [] args) (body : bodies)
--- builtin "lambda" (formals : body : bodies) =
---   case (paramNames, rest) of
---     (Just ps, Empty) -> return $ Procedure (Exact ps) (body : bodies)
---     (Just ps, Symbol r) -> return $ Procedure (Variadic ps r) (body : bodies)
---     _ -> empty
---   where
---     (params, rest) = collect formals
---     paramNames = mapM sym params
---     sym (Symbol s) = return s
---     sym _ = empty
--- builtin "if" [expr, then', else'] = do
---   v <- form expr
---   if v == Datum (Boolean False)
---     then form else'
---     else form then'
--- builtin "set!" [Symbol var, expr] = do
---   exists <- isDefined var
---   if exists
---     then form expr >>= define var
---     else empty
--- builtin _ _ = empty
---
--- collect :: Datum -> ([Datum], Datum)
--- collect (Cons v vs) = (v : rest, last') where (rest, last') = collect vs
--- collect v = ([], v)
---
--- call :: Formals -> [Datum] -> [Datum] -> Eval Value
--- call _ [] _ = raise $ String "Attempt to call a procedure with no body"
--- call (Exact []) [body] [] = form body
--- call (Exact []) (body : bodies) [] = form body >> call (Exact []) bodies []
--- call _ _ _ = raise $ String "Not implemented"
+apply :: Formals -> [Datum] -> [Value] -> Eval Value
+apply _ [] _ = syntaxError "Procedure has no body"
+apply (Exact []) [b] [] = reval (expression <* end) [b]
+apply _ [_] _ = syntaxError "Not implemented"
+apply for (b : bs) args = apply for [b] args >> apply for bs args

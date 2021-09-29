@@ -1,8 +1,16 @@
 module Main where
 
 import Control.Applicative
-import Control.Monad (void)
+import Control.Monad
 import Eval
+  ( Context,
+    Eval (..),
+    EvalResult (..),
+    SyntaxError (..),
+    form,
+    newContext,
+    program,
+  )
 import Grammar (Datum, datum)
 import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
@@ -75,7 +83,8 @@ repl c = do
     then return ()
     else case execute form line c of
       Left e -> ePrint e >> repl c
-      Right (Ok d, c', []) -> print d >> repl c'
+      Right (Ok (Just d), c', []) -> print d >> repl c'
+      Right (Ok Nothing, c', []) -> repl c'
       Right (Exception e, c', []) -> ePrint e >> repl c'
       Right (_, _, i) -> ePutStrLn ("Extra input: " ++ show i) >> repl c
 
