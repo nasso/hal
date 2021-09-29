@@ -28,14 +28,22 @@ instance Show Value where
   show (Datum d) = show d
   show (Procedure _ _) = "#<procedure>"
 
-type Context = Map String Value
+data Context = Context
+  { scope :: Map String Value,
+    parent :: Maybe Context
+  }
+  deriving (Show)
+
+newContext :: Context
+newContext =
+  Context
+    { scope = Map.empty,
+      parent = Nothing
+    }
 
 newtype SyntaxError = SyntaxError String deriving (Show, Eq)
 
 data EvalResult a = Ok a | Exception Datum deriving (Show, Eq)
-
-newContext :: Context
-newContext = Map.empty
 
 newtype Eval a = Eval
   { eval ::
@@ -43,6 +51,12 @@ newtype Eval a = Eval
       Context ->
       Either SyntaxError (EvalResult a, Context, [Datum])
   }
+
+getContext :: Eval Context
+getContext = Eval $ \ds ctx -> Right (Ok ctx, ctx, ds)
+
+setContext :: Context -> Eval ()
+setContext ctx = Eval $ \ds _ -> Right (Ok (), ctx, ds)
 
 getd :: Eval Datum
 getd = Eval $ \ds c -> case ds of
@@ -58,21 +72,6 @@ reval :: Eval a -> [Datum] -> Eval a
 reval a da = Eval $ \ds c -> case eval a da c of
   Left e -> Left e
   Right (r, c', _) -> Right (r, c', ds)
-
-fetch :: String -> Eval Value
-fetch s = Eval $ \ds c ->
-  case Map.lookup s c of
-    Just v -> Right (Ok v, c, ds)
-    Nothing -> Left $ SyntaxError $ "Undefined variable: " ++ s
-
-define :: String -> Value -> Eval ()
-define s v = Eval $ \ds c -> Right (Ok (), Map.insert s v c, ds)
-
-store :: String -> Value -> Eval ()
-store s v = Eval $ \ds c ->
-  if Map.member s c
-    then Right (Ok (), Map.insert s v c, ds)
-    else Right (Exception $ Symbol "&undefined", c, ds)
 
 syntaxError :: String -> Eval a
 syntaxError s = Eval $ \_ _ -> Left $ SyntaxError s
@@ -107,6 +106,52 @@ instance Alternative Eval where
   a <|> b = Eval $ \ds c -> case eval a ds c of
     Left _ -> eval b ds c
     Right r -> Right r
+
+beginScope :: Eval ()
+beginScope = do
+  ctx <- getContext
+  setContext $ Context {scope = Map.empty, parent = Just ctx}
+
+endScope :: Eval ()
+endScope = do
+  ctx <- getContext
+  case parent ctx of
+    Nothing -> syntaxError "Unexpected end of global scope"
+    Just ctx' -> setContext ctx'
+
+makeScope :: Eval Value -> Eval Value
+makeScope e = beginScope *> e <* endScope
+
+using :: Eval a -> Context -> Eval a
+using a ctx = do
+  ctx' <- getContext
+  setContext ctx *> a <* setContext ctx'
+
+fetch :: String -> Eval Value
+fetch varname = do
+  ctx <- getContext
+  case (Map.lookup varname (scope ctx), parent ctx) of
+    (Just v, _) -> return v
+    (Nothing, Just ctx') -> fetch varname `using` ctx'
+    _ -> syntaxError $ "Undefined variable: " ++ varname
+
+-- | Bind a value to a symbol
+define :: String -> Value -> Eval ()
+define s v = do
+  ctx <- getContext
+  setContext $ ctx {scope = Map.insert s v (scope ctx)}
+
+-- | Set the value of an existing variable
+assign :: String -> Value -> Eval ()
+assign var val = do
+  ctx <- getContext
+  if Map.member var (scope ctx)
+    then setContext $ ctx {scope = Map.insert var val (scope ctx)}
+    else case parent ctx of
+      Just pctx -> do
+        pctx' <- (assign var val >> getContext) `using` pctx
+        setContext $ ctx {parent = Just pctx'}
+      Nothing -> syntaxError $ "Undefined variable: " ++ var
 
 unexpected :: Eval a
 unexpected = do
@@ -260,7 +305,7 @@ assignment =
   symbol "set!" >> do
     v <- variable
     e <- expression
-    store v e
+    assign v e
     return e
 
 application :: Eval Value
@@ -268,8 +313,8 @@ application = do
   e <- expression
   proc' <- case e of
     Procedure for das -> return $ apply for das
-    _ -> raise $ Symbol "&error (not a procedure)"
-  args <- many expression
+    d -> raise $ Symbol $ "&error (not a procedure): " ++ show d
+  args <- many getd
   proc' args
 
 branch :: Eval Value
@@ -280,8 +325,24 @@ branch =
       then expression <* getd
       else getd *> expression
 
-apply :: Formals -> [Datum] -> [Value] -> Eval Value
+apply :: Formals -> [Datum] -> [Datum] -> Eval Value
 apply _ [] _ = syntaxError "Procedure has no body"
-apply (Exact []) [b] [] = reval (expression <* end) [b]
-apply _ [_] _ = syntaxError "Not implemented"
+apply f [b] args =
+  makeScope
+    ( defineFormals f args
+        *> reval (expression <* end) [b]
+    )
 apply for (b : bs) args = apply for [b] args >> apply for bs args
+
+defineFormals :: Formals -> [Datum] -> Eval ()
+defineFormals (Exact []) [] = return ()
+defineFormals (Exact (s : s')) (a : a') = do
+  v <- reval expression [a]
+  define s v >> defineFormals (Exact s') a'
+defineFormals (Exact _) [] = syntaxError "Too few arguments"
+defineFormals (Exact []) _ = syntaxError "Too many arguments"
+defineFormals (Variadic [] _var) _args = syntaxError "Variadics unsupported"
+defineFormals (Variadic (s : s') var) (a : a') = do
+  v <- reval expression [a]
+  define s v >> defineFormals (Variadic s' var) a'
+defineFormals (Variadic _ _) [] = syntaxError "Too few arguments"
