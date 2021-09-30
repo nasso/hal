@@ -1,11 +1,12 @@
 module Eval
   ( newContext,
+    fromScope,
     program,
     form,
     eval,
-    syntaxError,
+    evalError,
     raise,
-    SyntaxError (..),
+    EvalError (..),
     EvalResult (..),
     Eval,
     Context,
@@ -14,7 +15,6 @@ module Eval
 where
 
 import Control.Applicative
-import Control.Monad
 import Data.Functor
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -35,13 +35,46 @@ data Context = Context
   deriving (Show)
 
 newContext :: Context
-newContext =
-  Context
-    { scope = Map.empty,
-      parent = Nothing
-    }
+newContext = fromScope Map.empty
 
-newtype SyntaxError = SyntaxError String deriving (Show, Eq)
+fromScope :: Map String Value -> Context
+fromScope m = Context {scope = m, parent = Nothing}
+
+data EvalError
+  = SyntaxError
+  | Extra
+  | Eof
+  | Expected String Value
+  | Undefined String
+  | CompoundError EvalError EvalError
+  deriving (Eq)
+
+instance Show EvalError where
+  show SyntaxError = "syntax error"
+  show Extra = "extra input"
+  show Eof = "unexpected end of input"
+  show (Expected v got) = "expected " ++ v ++ ", got " ++ show got
+  show (Undefined name) = "undefined reference(s) to " ++ name
+  show (CompoundError e1 e2) = show e1 ++ ", " ++ show e2
+
+cross' :: EvalError -> EvalError -> EvalError
+cross' SyntaxError e = e
+cross' e SyntaxError = e
+cross' Extra e = e
+cross' e Extra = e
+cross' Eof e = e
+cross' e Eof = e
+cross' (Expected s v) (Expected s' v') | v == v' = Expected (s ++ "/" ++ s') v
+cross' (Undefined s) (Undefined s') | s == s' = Undefined s
+cross' (Undefined s) (Undefined s') = Undefined $ s ++ ", " ++ s'
+cross' (Expected _ _) (Undefined s') = Undefined s'
+cross' (Undefined s) (Expected _ _) = Undefined s
+cross' e1 e2 = CompoundError e1 e2
+
+cross :: EvalError -> EvalError -> EvalError
+cross (CompoundError e1 e2) e = cross' (cross e1 e) (cross e2 e)
+cross e (CompoundError e1 e2) = cross' (cross e1 e) (cross e2 e)
+cross e1 e2 = cross' e1 e2
 
 data EvalResult a = Ok a | Exception Datum deriving (Show, Eq)
 
@@ -49,7 +82,7 @@ newtype Eval a = Eval
   { eval ::
       [Datum] ->
       Context ->
-      Either SyntaxError (EvalResult a, Context, [Datum])
+      Either EvalError (EvalResult a, Context, [Datum])
   }
 
 getContext :: Eval Context
@@ -61,20 +94,20 @@ setContext ctx = Eval $ \ds _ -> Right (Ok (), ctx, ds)
 getd :: Eval Datum
 getd = Eval $ \ds c -> case ds of
   (d : ds') -> Right (Ok d, c, ds')
-  [] -> Left $ SyntaxError "Unexpected end of input"
+  [] -> Left Eof
 
 end :: Eval ()
 end = Eval $ \ds c -> case ds of
   [] -> Right (Ok (), c, [])
-  _ -> Left $ SyntaxError "Unexpected token"
+  _ -> Left Extra
 
 reval :: Eval a -> [Datum] -> Eval a
 reval a da = Eval $ \ds c -> case eval a da c of
   Left e -> Left e
   Right (r, c', _) -> Right (r, c', ds)
 
-syntaxError :: String -> Eval a
-syntaxError s = Eval $ \_ _ -> Left $ SyntaxError s
+evalError :: EvalError -> Eval a
+evalError e = Eval $ \_ _ -> Left e
 
 raise :: Datum -> Eval a
 raise e = Eval $ \ds c -> Right (Exception e, c, ds)
@@ -102,10 +135,13 @@ instance Monad Eval where
     Right (Ok a', c', ds') -> eval (f a') ds' c'
 
 instance Alternative Eval where
-  empty = syntaxError "Syntax error"
+  empty = evalError SyntaxError
   a <|> b = Eval $ \ds c -> case eval a ds c of
-    Left _ -> eval b ds c
     Right r -> Right r
+    Left e -> case eval b ds c of
+      Right r -> Right r
+      --Left e' -> Left $ CompoundError e e'
+      Left e' -> Left $ cross e e'
 
 beginScope :: Eval ()
 beginScope = do
@@ -116,7 +152,7 @@ endScope :: Eval ()
 endScope = do
   ctx <- getContext
   case parent ctx of
-    Nothing -> syntaxError "Unexpected end of global scope"
+    Nothing -> evalError SyntaxError
     Just ctx' -> setContext ctx'
 
 makeScope :: Eval Value -> Eval Value
@@ -133,7 +169,7 @@ fetch varname = do
   case (Map.lookup varname (scope ctx), parent ctx) of
     (Just v, _) -> return v
     (Nothing, Just ctx') -> fetch varname `using` ctx'
-    _ -> syntaxError $ "Undefined variable: " ++ varname
+    _ -> evalError $ Undefined varname
 
 -- | Bind a value to a symbol
 define :: String -> Value -> Eval ()
@@ -151,27 +187,19 @@ assign var val = do
       Just pctx -> do
         pctx' <- (assign var val >> getContext) `using` pctx
         setContext $ ctx {parent = Just pctx'}
-      Nothing -> syntaxError $ "Undefined variable: " ++ var
-
-unexpected :: Eval a
-unexpected = do
-  d <- getd
-  syntaxError $ "Unexpected " ++ show d
+      Nothing -> evalError $ Undefined var
 
 expected :: String -> Eval a
 expected s = do
   d <- getd
-  syntaxError $ "Expected " ++ s ++ ", got " ++ show d
-
-match :: (Datum -> Bool) -> Eval Datum
-match f = do
-  d <- getd
-  if f d
-    then return d
-    else unexpected
+  evalError $ Expected s $ Datum d
 
 nil :: Eval ()
-nil = void $ match (== Empty)
+nil = do
+  d <- getd
+  case d of
+    Empty -> return ()
+    _ -> evalError $ Expected "'()" $ Datum d
 
 boolean :: Eval Bool
 boolean = do
@@ -257,7 +285,7 @@ properWrap :: Eval a -> Eval a
 properWrap a = properList >>= reval (a <* end)
 
 program :: Eval ()
-program = void $ many form
+program = form >> end <|> program
 
 form :: Eval (Maybe Value)
 form = definition $> Nothing <|> Just <$> expression
@@ -326,23 +354,26 @@ branch =
       else getd *> expression
 
 apply :: Formals -> [Datum] -> [Datum] -> Eval Value
-apply _ [] _ = syntaxError "Procedure has no body"
-apply f [b] args =
+apply _ [] _ = evalError SyntaxError
+apply f b args =
   makeScope
     ( defineFormals f args
-        *> reval (expression <* end) [b]
+        *> reval (body <* end) b
     )
-apply for (b : bs) args = apply for [b] args >> apply for bs args
+  where
+    body = do
+      e <- expression
+      body <|> return e
 
 defineFormals :: Formals -> [Datum] -> Eval ()
 defineFormals (Exact []) [] = return ()
 defineFormals (Exact (s : s')) (a : a') = do
   v <- reval expression [a]
   define s v >> defineFormals (Exact s') a'
-defineFormals (Exact _) [] = syntaxError "Too few arguments"
-defineFormals (Exact []) _ = syntaxError "Too many arguments"
-defineFormals (Variadic [] _var) _args = syntaxError "Variadics unsupported"
+defineFormals (Exact _) [] = raise $ Symbol "&error (too few arguments)"
+defineFormals (Exact []) _ = raise $ Symbol "&error (too many arguments)"
+defineFormals (Variadic [] _var) _args = raise $ Symbol "&unsupported"
 defineFormals (Variadic (s : s') var) (a : a') = do
   v <- reval expression [a]
   define s v >> defineFormals (Variadic s' var) a'
-defineFormals (Variadic _ _) [] = syntaxError "Too few arguments"
+defineFormals (Variadic _ _) [] = raise $ Symbol "&error (too few arguments)"
