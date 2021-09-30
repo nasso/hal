@@ -5,13 +5,13 @@ import Control.Monad
 import Eval
   ( Context,
     Eval (..),
+    EvalError (..),
     EvalResult (..),
-    SyntaxError (..),
     form,
-    newContext,
     program,
   )
 import Grammar (Datum, datum)
+import Lib (standardContext)
 import Parsing (Parser (parse))
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -31,7 +31,9 @@ main :: IO ()
 main = do
   args <- getArgs >>= parseArgs defaultArgs
   case args of
-    Just (Args files i) -> void $ runWithArgs newContext files (i || null files)
+    Just (Args files i) ->
+      void $
+        runWithArgs standardContext files (i || null files)
     Just Help -> printUsage
     Nothing -> exitWithMessage "Invalid arguments."
 
@@ -61,10 +63,10 @@ execute ::
   Eval a ->
   String ->
   Context ->
-  Either SyntaxError (EvalResult a, Context, [Datum])
+  Either EvalError (EvalResult a, Context, [Datum])
 execute e s c = case parse (many datum) s of
   Just (d, "") -> eval e d c
-  _ -> Left $ SyntaxError "Syntax error"
+  _ -> Left SyntaxError
 
 runWithArgs :: Context -> [String] -> Bool -> IO ()
 runWithArgs _ [] False = return ()
@@ -74,7 +76,7 @@ runWithArgs c (path : paths) i = do
   case execute program src c of
     Left e -> ePrint e
     Right (_, c', []) -> runWithArgs c' paths i
-    _ -> ePrint "Extra input"
+    Right (v, _, e : _) -> ePutStrLn $ show e ++ ": " ++ show v
 
 repl :: Context -> IO ()
 repl c = do
