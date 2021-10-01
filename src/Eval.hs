@@ -3,9 +3,13 @@ module Eval
     fromScope,
     program,
     form,
+    reval,
     eval,
     evalError,
     raise,
+    define,
+    fetch,
+    assign,
     EvalError (..),
     EvalResult (..),
     Eval,
@@ -22,11 +26,22 @@ import Grammar (Datum (..))
 
 data Formals = Exact [String] | Variadic [String] String deriving (Show, Eq)
 
-data Value = Datum Datum | Procedure Formals [Datum] deriving (Eq)
+data Value = Datum Datum | Procedure ([Value] -> Eval Value)
 
 instance Show Value where
   show (Datum d) = show d
-  show (Procedure _ _) = "#<procedure>"
+  show (Procedure _) = "#<procedure>"
+
+eqv :: Value -> Value -> Bool
+eqv (Datum Empty) (Datum Empty) = True
+eqv (Datum (Character c)) (Datum (Character c')) = c == c'
+eqv (Datum (Number n)) (Datum (Number n')) = n == n'
+eqv (Datum (Boolean b)) (Datum (Boolean b')) = b == b'
+eqv (Datum (String s)) (Datum (String s')) = s == s'
+eqv (Datum (Symbol s)) (Datum (Symbol s')) = s == s'
+eqv (Datum (Cons a b)) (Datum (Cons a' b')) =
+  Datum a `eqv` Datum a' && Datum b `eqv` Datum b'
+eqv _ _ = False
 
 data Context = Context
   { scope :: Map String Value,
@@ -47,7 +62,6 @@ data EvalError
   | Expected String Value
   | Undefined String
   | CompoundError EvalError EvalError
-  deriving (Eq)
 
 instance Show EvalError where
   show SyntaxError = "syntax error"
@@ -55,7 +69,7 @@ instance Show EvalError where
   show Eof = "unexpected end of input"
   show (Expected v got) = "expected " ++ v ++ ", got " ++ show got
   show (Undefined name) = "undefined reference(s) to " ++ name
-  show (CompoundError e1 e2) = show e1 ++ ", " ++ show e2
+  show (CompoundError e1 e2) = show e1 ++ "; " ++ show e2
 
 cross' :: EvalError -> EvalError -> EvalError
 cross' SyntaxError e = e
@@ -64,7 +78,11 @@ cross' Extra e = e
 cross' e Extra = e
 cross' Eof e = e
 cross' e Eof = e
-cross' (Expected s v) (Expected s' v') | v == v' = Expected (s ++ "/" ++ s') v
+cross' (Expected s v) (Expected s' v')
+  | v `eqv` v' =
+    if s == s'
+      then Expected s v
+      else Expected (s ++ "/" ++ s') v
 cross' (Undefined s) (Undefined s') | s == s' = Undefined s
 cross' (Undefined s) (Undefined s') = Undefined $ s ++ ", " ++ s'
 cross' (Expected _ _) (Undefined s') = Undefined s'
@@ -140,7 +158,6 @@ instance Alternative Eval where
     Right r -> Right r
     Left e -> case eval b ds c of
       Right r -> Right r
-      --Left e' -> Left $ CompoundError e e'
       Left e' -> Left $ cross e e'
 
 beginScope :: Eval ()
@@ -284,16 +301,15 @@ properList =
 properWrap :: Eval a -> Eval a
 properWrap a = properList >>= reval (a <* end)
 
-program :: Eval ()
-program = form >> end <|> program
+program :: Eval (Maybe Value)
+program = end $> Nothing <|> form <* end <|> form *> program
 
 form :: Eval (Maybe Value)
 form = definition $> Nothing <|> Just <$> expression
 
 definition :: Eval ()
 definition =
-  variableDefinition
-    <|> properWrap (symbol "begin" >> many definition $> ())
+  variableDefinition <|> properWrap (symbol "begin" >> many definition $> ())
 
 variableDefinition :: Eval ()
 variableDefinition = properWrap $ do
@@ -315,8 +331,8 @@ lambda :: Eval Value
 lambda = do
   _ <- symbol "lambda"
   params <- formals
-  bodies <- some getd
-  return $ Procedure params bodies
+  body <- some getd
+  return $ Procedure $ lambdaRunner params body
 
 formals :: Eval Formals
 formals =
@@ -339,23 +355,21 @@ assignment =
 application :: Eval Value
 application = do
   e <- expression
-  proc' <- case e of
-    Procedure for das -> return $ apply for das
+  case e of
+    Procedure p -> many expression >>= p
     d -> raise $ Symbol $ "&error (not a procedure): " ++ show d
-  args <- many getd
-  proc' args
 
 branch :: Eval Value
 branch =
   symbol "if" >> do
     cond <- expression
-    if cond /= Datum (Boolean False)
-      then expression <* getd
-      else getd *> expression
+    case cond of
+      Datum (Boolean False) -> getd *> expression
+      _ -> expression <* getd
 
-apply :: Formals -> [Datum] -> [Datum] -> Eval Value
-apply _ [] _ = evalError SyntaxError
-apply f b args =
+lambdaRunner :: Formals -> [Datum] -> [Value] -> Eval Value
+lambdaRunner _ [] _ = evalError SyntaxError
+lambdaRunner f b args =
   makeScope
     ( defineFormals f args
         *> reval (body <* end) b
@@ -365,15 +379,13 @@ apply f b args =
       e <- expression
       body <|> return e
 
-defineFormals :: Formals -> [Datum] -> Eval ()
+defineFormals :: Formals -> [Value] -> Eval ()
 defineFormals (Exact []) [] = return ()
-defineFormals (Exact (s : s')) (a : a') = do
-  v <- reval expression [a]
-  define s v >> defineFormals (Exact s') a'
+defineFormals (Exact (s : s')) (a : a') =
+  define s a >> defineFormals (Exact s') a'
 defineFormals (Exact _) [] = raise $ Symbol "&error (too few arguments)"
 defineFormals (Exact []) _ = raise $ Symbol "&error (too many arguments)"
 defineFormals (Variadic [] _var) _args = raise $ Symbol "&unsupported"
-defineFormals (Variadic (s : s') var) (a : a') = do
-  v <- reval expression [a]
-  define s v >> defineFormals (Variadic s' var) a'
+defineFormals (Variadic (s : s') var) (a : a') =
+  define s a >> defineFormals (Variadic s' var) a'
 defineFormals (Variadic _ _) [] = raise $ Symbol "&error (too few arguments)"

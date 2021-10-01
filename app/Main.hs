@@ -1,18 +1,7 @@
 module Main where
 
-import Control.Applicative
-import Control.Monad
 import Eval
-  ( Context,
-    Eval (..),
-    EvalError (..),
-    EvalResult (..),
-    form,
-    program,
-  )
-import Grammar (Datum, datum)
-import Lib (standardContext)
-import Parsing (Parser (parse))
+import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
@@ -27,16 +16,6 @@ data Args
 defaultArgs :: Args
 defaultArgs = Args {sourceFiles = [], interactive = False}
 
-main :: IO ()
-main = do
-  args <- getArgs >>= parseArgs defaultArgs
-  case args of
-    Just (Args files i) ->
-      void $
-        runWithArgs standardContext files (i || null files)
-    Just Help -> printUsage
-    Nothing -> exitWithMessage "Invalid arguments."
-
 printUsage :: IO ()
 printUsage = do
   name <- getProgName
@@ -45,9 +24,6 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " [-i]"
   putStrLn $ "  " ++ name ++ " -h"
   putStrLn $ "  " ++ name ++ " --help"
-
-exitWithMessage :: String -> IO ()
-exitWithMessage msg = ePutStrLn msg >> exitWith (ExitFailure 84)
 
 parseArgs :: Args -> [String] -> IO (Maybe Args)
 parseArgs _ ("-h" : _) = return $ Just Help
@@ -59,45 +35,34 @@ parseArgs (Args files i) (file : xs) =
   parseArgs (Args {sourceFiles = files ++ [file], interactive = i}) xs
 parseArgs args _ = return $ Just args
 
-execute ::
-  Eval a ->
-  String ->
-  Context ->
-  Either EvalError (EvalResult a, Context, [Datum])
-execute e s c = case parse (many datum) s of
-  Just (d, "") -> eval e d c
-  _ -> Left SyntaxError
+handleArgs :: Maybe Args -> IO ()
+handleArgs Nothing = exitWithMessage "Invalid arguments."
+handleArgs (Just Help) = printUsage
+handleArgs (Just (Args files i)) = do
+  std <- loadStdLib
+  runFiles <- sequence_ <$> mapM loadFile files
+  repl' <- if i || null files then repl else return $ return Nothing
+  case exec (std >> runFiles >> repl') of
+    Left e -> ePrint e >> exitWithMessage "An error has occured."
+    Right r -> print r
 
-runWithArgs :: Context -> [String] -> Bool -> IO ()
-runWithArgs _ [] False = return ()
-runWithArgs c [] True = repl c
-runWithArgs c (path : paths) i = do
-  src <- readFile path
-  case execute program src c of
-    Left e -> ePrint e
-    Right (_, c', []) -> runWithArgs c' paths i
-    Right (v, _, e : _) -> ePutStrLn $ show e ++ ": " ++ show v
-
-repl :: Context -> IO ()
-repl c = do
+repl :: IO (Eval (Maybe Value))
+repl = do
   line <- prompt >> getLine
-  if line == "exit"
-    then return ()
-    else case execute form line c of
-      Left e -> ePrint e >> repl c
-      Right (Ok (Just d), c', []) -> print d >> repl c'
-      Right (Ok Nothing, c', []) -> repl c'
-      Right (Exception e, c', []) -> ePrint e >> repl c'
-      Right (_, _, i) -> ePutStrLn ("Extra input: " ++ show i) >> repl c
+  return $ evalString line
 
 prompt :: IO ()
 prompt = putStr "> " >> hFlush stdout
 
-ePutStr :: String -> IO ()
+ePutStr, ePutStrLn :: String -> IO ()
 ePutStr = hPutStr stderr
-
-ePutStrLn :: String -> IO ()
 ePutStrLn = hPutStrLn stderr
 
 ePrint :: Show a => a -> IO ()
 ePrint = hPrint stderr
+
+exitWithMessage :: String -> IO ()
+exitWithMessage msg = ePutStrLn msg >> exitWith (ExitFailure 84)
+
+main :: IO ()
+main = getArgs >>= parseArgs defaultArgs >>= handleArgs
