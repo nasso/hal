@@ -105,10 +105,10 @@ dSymbol :: Parser String
 dSymbol =
   lexeme $
     (:) <$> initial <*> many subsequent
+      <|> ((++) <$> literal "->" <*> many subsequent)
       <|> symbol "+"
       <|> symbol "-"
       <|> symbol "..."
-      <|> ((++) <$> literal "->" <*> many subsequent)
   where
     initial = alpha <|> oneOf "!$%&*/:<=>?~_^"
     subsequent = initial <|> digit <|> oneOf ".+-@"
