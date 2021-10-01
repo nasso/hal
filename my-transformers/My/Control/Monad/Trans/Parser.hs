@@ -16,6 +16,7 @@ module My.Control.Monad.Trans.Parser
     literal,
     chainl1,
     chainr1,
+    char,
     space,
     digit,
     lower,
@@ -98,6 +99,10 @@ chainr1 p op = scan
   where
     scan = p <**> rst
     rst = (flip <$> op <*> scan) <|> pure id
+
+-- | Parse a char equal to @c@.
+char :: MonadParser Char m => Char -> m Char
+char = like
 
 -- | Parse a unicode whitespace character (space, tab, newline, etc.).
 space :: MonadParser Char m => m Char

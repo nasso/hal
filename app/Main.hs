@@ -42,7 +42,7 @@ handleArgs (Just (Args files i)) = do
   std <- loadStdLib
   runFiles <- sequence_ <$> mapM loadFile files
   repl' <- if i || null files then repl else return $ return Nothing
-  case exec (std >> runFiles >> repl') of
+  case exec' (std >> runFiles >> repl') of
     Left e -> ePrint e >> exitWithMessage "An error has occured."
     Right r -> print r
 
