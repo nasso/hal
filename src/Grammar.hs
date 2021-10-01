@@ -122,17 +122,15 @@ dString = lexeme $ char '"' *> many strElem <* char '"'
 
 escapeSequence :: Parser Char
 escapeSequence =
-  char '\\'
-    >> ( char 'a' $> '\a'
-           <|> char 'b' $> '\b'
-           <|> char 'f' $> '\f'
-           <|> char 'n' $> '\n'
-           <|> char 'r' $> '\r'
-           <|> char 't' $> '\t'
-           <|> char 'v' $> '\v'
-           <|> char '"' $> '"'
-           <|> char '\\' $> '\\'
-       )
+  literal "\\a" $> '\a'
+    <|> literal "\\b" $> '\b'
+    <|> literal "\\f" $> '\f'
+    <|> literal "\\n" $> '\n'
+    <|> literal "\\r" $> '\r'
+    <|> literal "\\t" $> '\t'
+    <|> literal "\\v" $> '\v'
+    <|> literal "\\\"" $> '"'
+    <|> literal "\\\\" $> '\\'
 
 unicodeLiteral :: Parser Char
 unicodeLiteral = do
