@@ -13,21 +13,15 @@ where
 import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Data.Char (GeneralCategory (Space), chr, generalCategory)
 import Data.Functor (($>))
+import My.Control.Monad.Trans
 import Numeric (readHex)
-import Parsing
-  ( Parser,
-    alpha,
-    char,
-    digit,
-    getc,
-    lexeme,
-    literal,
-    match,
-    noneOf,
-    oneOf,
-    paren,
-    symbol,
-  )
+
+-- | A parser from `String` to values of type `a`.
+type Parser a = ParserT Char Maybe a
+
+-- | Parse a value wrapped in parentheses or square brackets.
+paren :: Parser a -> Parser a
+paren p = symbol "(" *> p <* symbol ")" <|> symbol "[" *> p <* symbol "]"
 
 -- | Represents a Scheme data value.
 data Datum
@@ -86,7 +80,7 @@ dBoolean :: Parser Bool
 dBoolean = lexeme $ symbol "#t" $> True <|> symbol "#f" $> False
 
 dCharacter :: Parser Char
-dCharacter = lexeme $ literal "#\\" >> (characterName <|> getc)
+dCharacter = lexeme $ literal "#\\" >> (characterName <|> next)
 
 characterName :: Parser Char
 characterName =

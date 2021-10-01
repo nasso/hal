@@ -1,18 +1,18 @@
-module Lib (exec, loadStdLib, loadBuiltins, evalString, loadFile) where
+module Lib (exec', loadStdLib, loadBuiltins, evalString, loadFile) where
 
 import Control.Applicative
 import Control.Monad
 import Eval
 import Grammar
-import Parsing
+import My.Control.Monad.Trans
 
-exec :: Eval a -> Either EvalError (EvalResult a)
-exec e = case eval e [] newContext of
+exec' :: Eval a -> Either EvalError (EvalResult a)
+exec' e = case eval e [] newContext of
   Left err -> Left err
   Right (r, _, _) -> Right r
 
 evalString :: String -> Eval (Maybe Value)
-evalString s = case parse (many datum) s of
+evalString s = case runParserT (many datum) s of
   Nothing -> evalError SyntaxError
   Just (ds, "") -> reval program ds
   Just (_, extra) -> raise $ String $ "Extra text: " ++ extra
