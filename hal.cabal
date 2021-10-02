@@ -29,6 +29,7 @@ library
   exposed-modules:
       Eval
       Grammar
+      Program
       Lib
   other-modules:
       Paths_hal
