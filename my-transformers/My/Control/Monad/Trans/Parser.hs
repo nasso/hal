@@ -1,12 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 module My.Control.Monad.Trans.Parser
   ( MonadParser (..),
-    ParserT (..),
     eof,
     match,
     sepBy,
@@ -30,9 +26,7 @@ where
 
 import Control.Applicative (Alternative (empty, many, (<|>)), (<**>))
 import Control.Monad (MonadPlus)
-import Data.Bifunctor (first)
 import Data.Char (isAlpha, isAlphaNum, isDigit, isLower, isSpace, isUpper)
-import My.Control.Monad.Trans.Class (MonadTrans (..))
 
 -- | A monad that parses a stream of tokens.
 class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
@@ -135,43 +129,3 @@ lexeme p = p <* many space
 -- | Parse exactly the given string and discard any trailing whitespace.
 symbol :: MonadParser Char m => String -> m String
 symbol = lexeme . literal
-
--- | Parser monad transformer.
-newtype ParserT t m a = ParserT {runParserT :: [t] -> m (a, [t])}
-
-instance Functor m => Functor (ParserT t m) where
-  fmap f (ParserT p) = ParserT $ fmap (first f) . p
-
-instance (Applicative m, Monad m) => Applicative (ParserT t m) where
-  pure a = ParserT $ \s -> pure (a, s)
-  mf <*> mx = ParserT $ \ts -> do
-    (f, ts') <- runParserT mf ts
-    (x, ts'') <- runParserT mx ts'
-    pure (f x, ts'')
-
-instance (Functor m, MonadPlus m) => Alternative (ParserT t m) where
-  empty = ParserT $ const empty
-  pta <|> ptb = ParserT $ \ts -> runParserT pta ts <|> runParserT ptb ts
-
-instance Monad m => Monad (ParserT t m) where
-  return = pure
-  m >>= f = ParserT $ \ts -> do
-    (a, ts') <- runParserT m ts
-    runParserT (f a) ts'
-
-instance MonadPlus m => MonadPlus (ParserT t m)
-
-instance (Monad m, MonadPlus m) => MonadParser t (ParserT t m) where
-  next = ParserT eat
-    where
-      eat [] = empty
-      eat (x : xs) = return (x, xs)
-
-  exec ts p = ParserT $ \s -> do
-    r <- runParserT p ts
-    pure (r, s)
-
-instance MonadTrans (ParserT t) where
-  lift m = ParserT $ \s -> do
-    a <- m
-    return (a, s)

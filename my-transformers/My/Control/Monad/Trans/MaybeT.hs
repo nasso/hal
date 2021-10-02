@@ -1,12 +1,12 @@
-module My.Control.Monad.Trans.Maybe
+module My.Control.Monad.Trans.MaybeT
   ( MaybeT (..),
   )
 where
 
-import Control.Applicative
-import Control.Monad
-import Control.Monad.Fail (MonadFail)
-import My.Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Applicative (Alternative (empty, (<|>)))
+import Control.Monad (MonadPlus)
+import My.Control.Monad.Trans (MonadTrans (..))
+import My.Control.Monad.Trans.IO (MonadIO (..))
 
 -- | The maybe monad transformer.
 newtype MaybeT m a = MaybeT {runMaybeT :: m (Maybe a)}
@@ -37,3 +37,6 @@ instance Monad m => MonadFail (MaybeT m) where
 
 instance MonadTrans MaybeT where
   lift m = MaybeT $ Just <$> m
+
+instance MonadIO m => MonadIO (MaybeT m) where
+  liftIO = lift . liftIO

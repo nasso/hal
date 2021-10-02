@@ -2,9 +2,9 @@ module Lib (exec', loadStdLib, loadBuiltins, evalString, loadFile) where
 
 import Control.Applicative
 import Control.Monad
+import Datum
 import Eval
-import Grammar
-import My.Control.Monad.Trans
+import My.Control.Monad.Trans.ParserT
 
 exec' :: Eval a -> Either EvalError (EvalResult a)
 exec' e = case eval e [] newContext of
@@ -52,21 +52,21 @@ builtinCdr _ = raise $ String "cdr: invalid arguments"
 
 builtinPredicates :: [(String, Value)]
 builtinPredicates =
-  [ ("eqv?", Procedure (fmap (Datum . Boolean) . builtinEqv)),
-    ("eq?", Procedure (fmap (Datum . Boolean) . builtinEq)),
-    ("boolean?", Procedure (fmap (Datum . Boolean) . builtinIsBoolean)),
-    ("number?", Procedure (fmap (Datum . Boolean) . builtinIsNumber)),
-    ("symbol?", Procedure (fmap (Datum . Boolean) . builtinIsSymbol)),
-    ("char?", Procedure (fmap (Datum . Boolean) . builtinIsChar)),
-    ("string?", Procedure (fmap (Datum . Boolean) . builtinIsString)),
-    ("pair?", Procedure (fmap (Datum . Boolean) . builtinIsPair)),
-    ("null?", Procedure (fmap (Datum . Boolean) . builtinIsNull))
+  [ ("eqv?", Procedure (fmap (Datum . Bool) . builtinEqv)),
+    ("eq?", Procedure (fmap (Datum . Bool) . builtinEq)),
+    ("boolean?", Procedure (fmap (Datum . Bool) . builtinIsBool)),
+    ("number?", Procedure (fmap (Datum . Bool) . builtinIsNumber)),
+    ("symbol?", Procedure (fmap (Datum . Bool) . builtinIsSymbol)),
+    ("char?", Procedure (fmap (Datum . Bool) . builtinIsChar)),
+    ("string?", Procedure (fmap (Datum . Bool) . builtinIsString)),
+    ("pair?", Procedure (fmap (Datum . Bool) . builtinIsPair)),
+    ("null?", Procedure (fmap (Datum . Bool) . builtinIsNull))
   ]
 
-builtinIsBoolean :: [Value] -> Eval Bool
-builtinIsBoolean [Datum (Boolean _)] = return True
-builtinIsBoolean [_] = return False
-builtinIsBoolean _ = raise $ String "boolean?: invalid arguments"
+builtinIsBool :: [Value] -> Eval Bool
+builtinIsBool [Datum (Bool _)] = return True
+builtinIsBool [_] = return False
+builtinIsBool _ = raise $ String "boolean?: invalid arguments"
 
 builtinIsNumber :: [Value] -> Eval Bool
 builtinIsNumber [Datum (Number _)] = return True
@@ -79,7 +79,7 @@ builtinIsSymbol [_] = return False
 builtinIsSymbol _ = raise $ String "symbol?: invalid arguments"
 
 builtinIsChar :: [Value] -> Eval Bool
-builtinIsChar [Datum (Character _)] = return True
+builtinIsChar [Datum (Char _)] = return True
 builtinIsChar [_] = return False
 builtinIsChar _ = raise $ String "char?: invalid arguments"
 
@@ -100,9 +100,9 @@ builtinIsNull _ = raise $ String "null?: invalid arguments"
 
 builtinEq :: [Value] -> Eval Bool
 builtinEq [Datum Empty, Datum Empty] = return True
-builtinEq [Datum (Character c), Datum (Character c')] = return $ c == c'
+builtinEq [Datum (Char c), Datum (Char c')] = return $ c == c'
 builtinEq [Datum (Number n), Datum (Number n')] = return $ n == n'
-builtinEq [Datum (Boolean b), Datum (Boolean b')] = return $ b == b'
+builtinEq [Datum (Bool b), Datum (Bool b')] = return $ b == b'
 builtinEq [Datum (String s), Datum (String s')] = return $ s == s'
 builtinEq [Datum (Symbol s), Datum (Symbol s')] = return $ s == s'
 builtinEq [_, _] = return False
@@ -129,11 +129,11 @@ builtinArithmetics =
 
 builtinNumComparisons :: [(String, Value)]
 builtinNumComparisons =
-  [ ("=", Procedure (fmap (Datum . Boolean) . builtinOrd (==))),
-    ("<", Procedure (fmap (Datum . Boolean) . builtinOrd (<))),
-    (">", Procedure (fmap (Datum . Boolean) . builtinOrd (>))),
-    ("<=", Procedure (fmap (Datum . Boolean) . builtinOrd (<=))),
-    (">=", Procedure (fmap (Datum . Boolean) . builtinOrd (>=)))
+  [ ("=", Procedure (fmap (Datum . Bool) . builtinOrd (==))),
+    ("<", Procedure (fmap (Datum . Bool) . builtinOrd (<))),
+    (">", Procedure (fmap (Datum . Bool) . builtinOrd (>))),
+    ("<=", Procedure (fmap (Datum . Bool) . builtinOrd (<=))),
+    (">=", Procedure (fmap (Datum . Bool) . builtinOrd (>=)))
   ]
 
 builtinOrd :: (Double -> Double -> Bool) -> [Value] -> Eval Bool
