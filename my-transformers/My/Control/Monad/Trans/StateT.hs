@@ -63,7 +63,7 @@ instance MonadReader r m => MonadReader r (StateT s m) where
   local f st = StateT $ \s -> local f (runStateT st s)
 
 instance MonadParser p m => MonadParser p (StateT s m) where
-  next = lift next
+  item = lift item
   exec ts e = StateT $ \s -> do
     ((a, s'), p) <- exec ts (runStateT e s)
     return ((a, p), s')

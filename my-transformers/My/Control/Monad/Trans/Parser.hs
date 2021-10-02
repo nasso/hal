@@ -30,20 +30,20 @@ import Data.Char (isAlpha, isAlphaNum, isDigit, isLower, isSpace, isUpper)
 
 -- | A monad that parses a stream of tokens.
 class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
-  -- | Read the next token.
-  next :: m t
+  -- | Parse the next item.
+  item :: m t
 
   -- | Run a parser on a different stream of tokens.
   exec :: [t] -> m a -> m (a, [t])
 
 -- | Parse the end of the stream.
 eof :: MonadParser t m => m ()
-eof = (next >> empty) <|> return ()
+eof = (item >> empty) <|> return ()
 
--- | Parse a single token satisfying the given predicate.
+-- | Parse a single item satisfying the given predicate.
 match :: MonadParser t m => (t -> Bool) -> m t
 match f = do
-  x <- next
+  x <- item
   if f x
     then return x
     else empty
