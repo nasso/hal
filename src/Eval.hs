@@ -22,7 +22,7 @@ import Control.Applicative
 import Data.Functor
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Grammar (Datum (..))
+import Datum (Datum (..))
 
 data Formals = Exact [String] | Variadic [String] String deriving (Show, Eq)
 
@@ -34,9 +34,9 @@ instance Show Value where
 
 eqv :: Value -> Value -> Bool
 eqv (Datum Empty) (Datum Empty) = True
-eqv (Datum (Character c)) (Datum (Character c')) = c == c'
+eqv (Datum (Char c)) (Datum (Char c')) = c == c'
 eqv (Datum (Number n)) (Datum (Number n')) = n == n'
-eqv (Datum (Boolean b)) (Datum (Boolean b')) = b == b'
+eqv (Datum (Bool b)) (Datum (Bool b')) = b == b'
 eqv (Datum (String s)) (Datum (String s')) = s == s'
 eqv (Datum (Symbol s)) (Datum (Symbol s')) = s == s'
 eqv (Datum (Cons a b)) (Datum (Cons a' b')) =
@@ -222,7 +222,7 @@ boolean :: Eval Bool
 boolean = do
   d <- getd
   case d of
-    Boolean b -> return b
+    Bool b -> return b
     _ -> expected "boolean"
 
 number :: Eval Double
@@ -236,7 +236,7 @@ character :: Eval Char
 character = do
   d <- getd
   case d of
-    Character c -> return c
+    Char c -> return c
     _ -> expected "character"
 
 string :: Eval String
@@ -248,9 +248,9 @@ string = do
 
 constant :: Eval Datum
 constant =
-  Boolean <$> boolean
+  Bool <$> boolean
     <|> Number <$> number
-    <|> Character <$> character
+    <|> Char <$> character
     <|> String <$> string
     <|> expected "constant"
 
@@ -364,7 +364,7 @@ branch =
   symbol "if" >> do
     cond <- expression
     case cond of
-      Datum (Boolean False) -> getd *> expression
+      Datum (Bool False) -> getd *> expression
       _ -> expression <* getd
 
 lambdaRunner :: Formals -> [Datum] -> [Value] -> Eval Value

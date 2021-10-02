@@ -14,13 +14,17 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      .
-  exposed-modules:     My.Control.Monad.Trans
-  other-modules:
-    My.Control.Monad.Trans.Class
-    My.Control.Monad.Trans.Error
-    My.Control.Monad.Trans.Identity
+  exposed-modules:
+    My.Control.Monad.Trans
+    My.Control.Monad.Trans.ErrorT
+    My.Control.Monad.Trans.IdentityT
+    My.Control.Monad.Trans.MaybeT
+    My.Control.Monad.Trans.ParserT
+    My.Control.Monad.Trans.ReaderT
+    My.Control.Monad.Trans.StateT
     My.Control.Monad.Trans.IO
-    My.Control.Monad.Trans.Maybe
+  other-modules:
+    My.Control.Monad.Trans.Error
     My.Control.Monad.Trans.Parser
     My.Control.Monad.Trans.Reader
     My.Control.Monad.Trans.State

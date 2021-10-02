@@ -1,9 +1,9 @@
-module Grammar
+module Datum
   ( datum,
     Datum (..),
-    dBoolean,
+    dBool,
     dNumber,
-    dCharacter,
+    dChar,
     dString,
     dSymbol,
     show,
@@ -13,7 +13,7 @@ where
 import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Data.Char (GeneralCategory (Space), chr, generalCategory)
 import Data.Functor (($>))
-import My.Control.Monad.Trans
+import My.Control.Monad.Trans.ParserT
 import Numeric (readHex)
 
 -- | A parser from `String` to values of type `a`.
@@ -25,9 +25,9 @@ paren p = symbol "(" *> p <* symbol ")" <|> symbol "[" *> p <* symbol "]"
 
 -- | Represents a Scheme data value.
 data Datum
-  = Boolean Bool
+  = Bool Bool
   | Number Double
-  | Character Char
+  | Char Char
   | String String
   | Symbol String
   | Cons Datum Datum
@@ -43,20 +43,20 @@ instance Show Datum where
   show (Cons (Symbol "quasisyntax") (Cons v Empty)) = "#`" ++ show v
   show (Cons (Symbol "unsyntax") (Cons v Empty)) = "#," ++ show v
   show (Cons (Symbol "unsyntax-splicing") (Cons v Empty)) = "#,@" ++ show v
-  show (Boolean True) = "#t"
-  show (Boolean False) = "#f"
+  show (Bool True) = "#t"
+  show (Bool False) = "#f"
   show (Number n) = show n
-  show (Character '\x0007') = "#\\alarm"
-  show (Character '\x0008') = "#\\backspace"
-  show (Character '\x007f') = "#\\delete"
-  show (Character '\x001b') = "#\\esc"
-  show (Character '\x000a') = "#\\newline"
-  show (Character '\x000c') = "#\\page"
-  show (Character '\x000d') = "#\\return"
-  show (Character ' ') = "#\\space"
-  show (Character '\t') = "#\\tab"
-  show (Character '\v') = "#\\vtab"
-  show (Character c) = "#\\" ++ [c]
+  show (Char '\x0007') = "#\\alarm"
+  show (Char '\x0008') = "#\\backspace"
+  show (Char '\x007f') = "#\\delete"
+  show (Char '\x001b') = "#\\esc"
+  show (Char '\x000a') = "#\\newline"
+  show (Char '\x000c') = "#\\page"
+  show (Char '\x000d') = "#\\return"
+  show (Char ' ') = "#\\space"
+  show (Char '\t') = "#\\tab"
+  show (Char '\v') = "#\\vtab"
+  show (Char c) = "#\\" ++ [c]
   show (String s) = show s
   show (Symbol s) = s
   show (Cons car cdr) = "(" ++ show car ++ expand cdr ++ ")"
@@ -69,18 +69,18 @@ instance Show Datum where
 
 datum :: Parser Datum
 datum =
-  Boolean <$> dBoolean
-    <|> Character <$> dCharacter
+  Bool <$> dBool
+    <|> Char <$> dChar
     <|> Symbol <$> dSymbol
     <|> String <$> dString
     <|> Number <$> dNumber
     <|> dList
 
-dBoolean :: Parser Bool
-dBoolean = lexeme $ symbol "#t" $> True <|> symbol "#f" $> False
+dBool :: Parser Bool
+dBool = lexeme $ symbol "#t" $> True <|> symbol "#f" $> False
 
-dCharacter :: Parser Char
-dCharacter = lexeme $ literal "#\\" >> (characterName <|> next)
+dChar :: Parser Char
+dChar = lexeme $ literal "#\\" >> (characterName <|> next)
 
 characterName :: Parser Char
 characterName =
