@@ -62,5 +62,5 @@ instance MonadError e m => MonadError e (ReaderT r m) where
     runReaderT m r `catchError` \e -> runReaderT (f e) r
 
 instance MonadParser p m => MonadParser p (ReaderT r m) where
-  next = lift next
+  item = lift item
   exec ts e = ReaderT $ exec ts . runReaderT e

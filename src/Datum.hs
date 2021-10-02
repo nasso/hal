@@ -80,7 +80,7 @@ dBool :: Parser Bool
 dBool = lexeme $ symbol "#t" $> True <|> symbol "#f" $> False
 
 dChar :: Parser Char
-dChar = lexeme $ literal "#\\" >> (characterName <|> next)
+dChar = lexeme $ literal "#\\" >> (characterName <|> item)
 
 characterName :: Parser Char
 characterName =

@@ -44,7 +44,7 @@ instance Monad m => Monad (ParserT t m) where
 instance MonadPlus m => MonadPlus (ParserT t m)
 
 instance (Monad m, MonadPlus m) => MonadParser t (ParserT t m) where
-  next = ParserT eat
+  item = ParserT eat
     where
       eat [] = empty
       eat (x : xs) = return (x, xs)

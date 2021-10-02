@@ -63,7 +63,7 @@ instance MonadReader r m => MonadReader r (ErrorT e m) where
   local f st = ErrorT $ local f (runErrorT st)
 
 instance MonadParser t m => MonadParser t (ErrorT e m) where
-  next = lift next
+  item = lift item
   exec ts e = ErrorT $ do
     v <- exec ts $ runErrorT e
     case v of
