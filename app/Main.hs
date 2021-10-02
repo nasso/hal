@@ -1,7 +1,9 @@
 module Main where
 
+import Control.Monad
 import Eval
 import Lib
+import My.Control.Monad.Trans.IO
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
@@ -13,17 +15,11 @@ data Args
       }
   | Help
 
+main :: IO ()
+main = getArgs >>= parseArgs defaultArgs >>= handleArgs
+
 defaultArgs :: Args
 defaultArgs = Args {sourceFiles = [], interactive = False}
-
-printUsage :: IO ()
-printUsage = do
-  name <- getProgName
-  putStrLn "USAGE"
-  putStrLn $ "  " ++ name ++ " [files...] [-i]"
-  putStrLn $ "  " ++ name ++ " [-i]"
-  putStrLn $ "  " ++ name ++ " -h"
-  putStrLn $ "  " ++ name ++ " --help"
 
 parseArgs :: Args -> [String] -> IO (Maybe Args)
 parseArgs _ ("-h" : _) = return $ Just Help
@@ -39,17 +35,35 @@ handleArgs :: Maybe Args -> IO ()
 handleArgs Nothing = exitWithMessage "Invalid arguments."
 handleArgs (Just Help) = printUsage
 handleArgs (Just (Args files i)) = do
-  std <- loadStdLib
-  runFiles <- sequence_ <$> mapM loadFile files
-  repl' <- if i || null files then repl else return $ return Nothing
-  case exec' (std >> runFiles >> repl') of
-    Left e -> ePrint e >> exitWithMessage "An error has occured."
-    Right r -> print r
+  r <- runEval (vm files (i || null files))
+  case r of
+    Left err -> exitWithMessage err
+    Right _ -> return ()
 
-repl :: IO (Eval (Maybe Value))
+printUsage :: IO ()
+printUsage = do
+  name <- getProgName
+  putStrLn "USAGE"
+  putStrLn $ "  " ++ name ++ " [files...] [-i]"
+  putStrLn $ "  " ++ name ++ " [-i]"
+  putStrLn $ "  " ++ name ++ " -h"
+  putStrLn $ "  " ++ name ++ " --help"
+
+vm :: [FilePath] -> Bool -> Eval ()
+vm files i =
+  loadStdLib
+    >> mapM_ loadFile files
+    >> when i repl
+
+repl :: Eval ()
 repl = do
-  line <- prompt >> getLine
-  return $ evalString line
+  line <- liftIO $ prompt >> getLine
+  if line == ":quit"
+    then return ()
+    else void $ runString line >>= liftIO . printM
+  where
+    printM Nothing = return ()
+    printM (Just m) = print m
 
 prompt :: IO ()
 prompt = putStr "> " >> hFlush stdout
@@ -63,6 +77,3 @@ ePrint = hPrint stderr
 
 exitWithMessage :: String -> IO ()
 exitWithMessage msg = ePutStrLn msg >> exitWith (ExitFailure 84)
-
-main :: IO ()
-main = getArgs >>= parseArgs defaultArgs >>= handleArgs
