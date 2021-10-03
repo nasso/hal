@@ -4,6 +4,7 @@ module Eval
 where
 
 import Control.Monad
+import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -44,11 +45,7 @@ foldToLast = foldr1 (>>)
 
 -- | Allocate a new value in the heap and return its address.
 alloc :: Value -> Eval Int
-alloc v = do
-  h <- get
-  let (a, h') = Heap.alloc h v
-  put h'
-  return a
+alloc v = state (Heap.alloc v)
 
 -- | Run an evaluator with a symbol bound to the address of a heap value.
 bind :: Var -> Int -> Eval a -> Eval a
@@ -68,28 +65,78 @@ defineAll :: [(Var, Value)] -> Eval a -> Eval a
 defineAll [] = id
 defineAll ((n, v) : xs) = define n v . defineAll xs
 
+-- | Fetch a value from the heap.
+fetch :: Int -> Eval Value
+fetch a = do
+  v <- gets (Heap.fetch a)
+  case v of
+    Just v' -> return v'
+    Nothing -> throwError "Segmentation fault."
+
+store :: Value -> Int -> Eval ()
+store v a = modify (Heap.store a v)
+
+-- | Get the address of a variable in the environment.
+ref :: Var -> Eval Int
+ref s = do
+  a <- asks (Map.lookup s)
+  case a of
+    Just a' -> return a'
+    Nothing -> throwError $ "unbound variable: " ++ show s
+
+-- | Dereference a variable in the environment.
+deref :: Var -> Eval Value
+deref n = ref n >>= fetch
+
+-- | Set the value of a variable in the environment.
+set :: Var -> Value -> Eval ()
+set n v = ref n >>= store v
+
+-- | Set the values of variables in the environment.
+setAll :: [(Var, Value)] -> Eval ()
+setAll [] = return ()
+setAll ((n, v) : xs) = set n v >> setAll xs
+
 -- | Evaluates a program.
 evalProgram :: Program -> Eval a -> Eval a
 evalProgram (Program []) e = e
-evalProgram (Program [f]) e = evalForm f (return id) >> e
+evalProgram (Program [f]) e = evalForm f (const e)
 evalProgram (Program (f : fs)) e =
-  evalForm f $ const <$> evalProgram (Program fs) e
+  evalForm f $ const $ evalProgram (Program fs) e
 
 -- | Evaluate a form and run @e@ in the potentially modified environment.
-evalForm :: Form -> Eval (Maybe Value -> a) -> Eval a
-evalForm (Expr expr) e = e <*> (Just <$> evalExpr expr)
-evalForm (Def def) e = evalDef def $ e <*> return Nothing
+evalForm :: Form -> (Maybe Value -> Eval a) -> Eval a
+evalForm (Expr expr) e = evalExpr expr >>= e . Just
+evalForm (Def def) e = evalDef def $ e Nothing
 
 -- | Evaluates a definition.
 evalDef :: Definition -> Eval a -> Eval a
 evalDef b ev = do
-  bindings <- unroll b >>= mapM (prealloc . fst)
-  bindAll bindings ev
+  pairs <- unroll b
+  bindings <- mapM (prealloc . fst) pairs
+  bindAll bindings (setAllExprs pairs >> ev)
   where
     prealloc v = (,) v <$> alloc (Datum $ Datum.Bool False)
     unroll (VarDef n e) = return [(n, e)]
     unroll (Begin ds) = join <$> mapM unroll ds
+    setAllExprs [] = return ()
+    setAllExprs ((n, e) : xs) = evalExpr e >>= set n >> setAllExprs xs
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Eval Value
-evalExpr = error "evalExpr not implemented"
+evalExpr (Lit (Program.Bool b)) = return $ Datum $ Datum.Bool b
+evalExpr (Lit (Program.Number i)) = return $ Datum $ Datum.Number i
+evalExpr (Lit (Program.String s)) = return $ Datum $ Datum.String s
+evalExpr (Lit (Program.Char c)) = return $ Datum $ Datum.Char c
+evalExpr (Sym s) = deref s
+evalExpr (Quote d) = return $ Datum d
+evalExpr (If cond then' else') = do
+  b <- evalExpr cond
+  case b of
+    Datum (Datum.Bool False) -> evalExpr else'
+    _ -> evalExpr then'
+evalExpr (Set var expr) = do
+  val <- evalExpr expr
+  set var val $> val
+evalExpr (Lambda _ _) = throwError "lambda not implemented"
+evalExpr (Application _ _) = throwError "application not implemented"
