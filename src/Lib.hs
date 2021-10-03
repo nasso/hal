@@ -1,7 +1,14 @@
-module Lib (runEval, loadStdLib, loadBuiltins, runString, loadFile) where
+module Lib
+  ( withStdLib,
+    withBuiltins,
+    withFormStr,
+    withProgramStr,
+    withFile,
+    withFiles,
+  )
+where
 
 import Control.Applicative
-import Control.Monad
 import Datum
 import Eval
 import My.Control.Monad.Trans.ErrorT
@@ -9,33 +16,43 @@ import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.ParserT
 import Program
 
-parseAst :: String -> Maybe Program
-parseAst s = do
+parseAst :: Program.Parser a -> String -> Maybe a
+parseAst p s = do
   (ds, []) <- runParserT (many datum) s
-  (ast, []) <- runParserT program ds
+  (ast, []) <- runParserT p ds
   return ast
 
-runString :: String -> Eval (Maybe Value)
-runString s = case parseAst s of
+withFormStr :: String -> Eval (Maybe Value -> a) -> Eval a
+withFormStr s e = case parseAst Program.form s of
   Nothing -> throwError "Syntax error"
-  Just p -> evalProgram p
+  Just f -> evalForm f e
 
-loadFile :: FilePath -> Eval ()
-loadFile f = void $ liftIO (readFile f) >>= runString
+withProgramStr :: String -> Eval a -> Eval a
+withProgramStr s e = case parseAst Program.program s of
+  Nothing -> throwError "Syntax error"
+  Just p -> evalProgram p e
 
-loadStdLib :: Eval ()
-loadStdLib = loadBuiltins >> loadFile "lang/std.scm"
+withFile :: FilePath -> Eval a -> Eval a
+withFile f e = do
+  src <- liftIO $ readFile f
+  withProgramStr src e
 
-loadBuiltins :: Eval ()
-loadBuiltins = mapM_ (uncurry define) builtins
+withFiles :: [FilePath] -> Eval a -> Eval a
+withFiles = foldr ((.) . withFile) id
+
+withStdLib :: Eval a -> Eval a
+withStdLib = withBuiltins . withFile "lang/std.scm"
+
+withBuiltins :: Eval a -> Eval a
+withBuiltins = defineAll builtins
 
 procedure :: ([Value] -> Eval Value) -> Value
 procedure = Closure emptyEnv
 
-builtins :: [(String, Value)]
+builtins :: [(Var, Value)]
 builtins = builtinList ++ builtinPredicates ++ builtinArithmetics
 
-builtinList :: [(String, Value)]
+builtinList :: [(Var, Value)]
 builtinList =
   [ ("cons", procedure (fmap Datum . builtinCons)),
     ("car", procedure (fmap Datum . builtinCar)),
@@ -54,7 +71,7 @@ builtinCdr :: [Value] -> Eval Datum
 builtinCdr [Datum (Cons _ cdr)] = return cdr
 builtinCdr _ = throwError "cdr: invalid arguments"
 
-builtinPredicates :: [(String, Value)]
+builtinPredicates :: [(Var, Value)]
 builtinPredicates =
   [ ("eqv?", procedure (fmap (Datum . Datum.Bool) . builtinEqv)),
     ("eq?", procedure (fmap (Datum . Datum.Bool) . builtinEq)),
@@ -120,7 +137,7 @@ builtinEqv [Datum (Cons a b), Datum (Cons a' b')] = do
 builtinEqv [a, b] = builtinEq [a, b]
 builtinEqv _ = throwError "eqv?: invalid arguments"
 
-builtinArithmetics :: [(String, Value)]
+builtinArithmetics :: [(Var, Value)]
 builtinArithmetics =
   [ ("+", procedure (fmap (Datum . Datum.Number) . builtinSum)),
     ("-", procedure (fmap (Datum . Datum.Number) . builtinDiff)),
@@ -131,7 +148,7 @@ builtinArithmetics =
   ]
     ++ builtinNumComparisons
 
-builtinNumComparisons :: [(String, Value)]
+builtinNumComparisons :: [(Var, Value)]
 builtinNumComparisons =
   [ ("=", procedure (fmap (Datum . Datum.Bool) . builtinOrd (==))),
     ("<", procedure (fmap (Datum . Datum.Bool) . builtinOrd (<))),

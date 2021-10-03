@@ -50,17 +50,14 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " --help"
 
 vm :: [FilePath] -> Bool -> Eval ()
-vm files i =
-  loadStdLib
-    >> mapM_ loadFile files
-    >> when i repl
+vm files i = withStdLib (withFiles files $ when i repl)
 
 repl :: Eval ()
 repl = do
   line <- liftIO $ prompt >> getLine
   if line == ":quit"
     then return ()
-    else void $ runString line >>= liftIO . printM
+    else void $ withFormStr line (return id) >>= liftIO . printM
   where
     printM Nothing = return ()
     printM (Just m) = print m
