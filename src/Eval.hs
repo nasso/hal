@@ -47,6 +47,14 @@ foldToLast = foldr1 (>>)
 alloc :: Value -> Eval Int
 alloc v = state (Heap.alloc v)
 
+-- | Allocate many values in the heap and return their addresses.
+allocAll :: [Value] -> Eval [Int]
+allocAll [] = return []
+allocAll (v : vs) = do
+  a <- alloc v
+  as <- allocAll vs
+  return (a : as)
+
 -- | Run an evaluator with a symbol bound to the address of a heap value.
 bind :: Var -> Int -> Eval a -> Eval a
 bind s a = local (Map.insert s a)
@@ -138,5 +146,28 @@ evalExpr (If cond then' else') = do
 evalExpr (Set var expr) = do
   val <- evalExpr expr
   set var val $> val
-evalExpr (Lambda _ _) = throwError "lambda not implemented"
-evalExpr (Application _ _) = throwError "application not implemented"
+evalExpr (Lambda formals body) = do
+  env <- ask -- capture the environment
+  return $ -- create a closure
+    Closure env $ \args -> do
+      addrs <- allocAll args -- box all arguments
+      bindFormals formals addrs $ evalBody body -- bind args and eval the body
+evalExpr (Application funExpr argExprs) = do
+  val <- evalExpr funExpr
+  args <- mapM evalExpr argExprs
+  case val of
+    Closure env fn -> local (const env) $ fn args
+    _ -> throwError "not a procedure"
+
+-- | Bind the formals of a lambda expression some addresses.
+bindFormals :: Formals -> [Int] -> Eval a -> Eval a
+bindFormals (Exact []) [] e = e
+bindFormals (Exact []) _ _ = throwError "too many arguments"
+bindFormals (Exact _) [] _ = throwError "not enough arguments"
+bindFormals (Exact (p : ps)) (a : as) e = bind p a $ bindFormals (Exact ps) as e
+bindFormals (Variadic _ _) _ _ = error "variadics not supported"
+
+-- | Evaluates a body, that is, a sequence of expresion, and returns the value
+-- of the last expression.
+evalBody :: NonEmpty Expression -> Eval Value
+evalBody = foldToLast . fmap evalExpr

@@ -51,7 +51,7 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " --help"
 
 vm :: [FilePath] -> Bool -> Eval ()
-vm files i = {- withStdLib $ -} withFiles files $ when i repl
+vm files i = withStdLib $ withFiles files $ when i repl
 
 repl :: Eval ()
 repl = do
