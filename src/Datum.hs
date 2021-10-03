@@ -31,19 +31,19 @@ data Datum
   | Char Char
   | String String
   | Symbol String
-  | Cons Datum Datum
+  | Pair Datum Datum
   | Empty
   deriving (Eq)
 
 instance Show Datum where
-  show (Cons (Symbol "quote") (Cons v Empty)) = "'" ++ show v
-  show (Cons (Symbol "quasiquote") (Cons v Empty)) = "`" ++ show v
-  show (Cons (Symbol "unquote") (Cons v Empty)) = "," ++ show v
-  show (Cons (Symbol "unquote-splicing") (Cons v Empty)) = ",@" ++ show v
-  show (Cons (Symbol "syntax") (Cons v Empty)) = "#'" ++ show v
-  show (Cons (Symbol "quasisyntax") (Cons v Empty)) = "#`" ++ show v
-  show (Cons (Symbol "unsyntax") (Cons v Empty)) = "#," ++ show v
-  show (Cons (Symbol "unsyntax-splicing") (Cons v Empty)) = "#,@" ++ show v
+  show (Pair (Symbol "quote") (Pair v Empty)) = "'" ++ show v
+  show (Pair (Symbol "quasiquote") (Pair v Empty)) = "`" ++ show v
+  show (Pair (Symbol "unquote") (Pair v Empty)) = "," ++ show v
+  show (Pair (Symbol "unquote-splicing") (Pair v Empty)) = ",@" ++ show v
+  show (Pair (Symbol "syntax") (Pair v Empty)) = "#'" ++ show v
+  show (Pair (Symbol "quasisyntax") (Pair v Empty)) = "#`" ++ show v
+  show (Pair (Symbol "unsyntax") (Pair v Empty)) = "#," ++ show v
+  show (Pair (Symbol "unsyntax-splicing") (Pair v Empty)) = "#,@" ++ show v
   show (Bool True) = "#t"
   show (Bool False) = "#f"
   show (Number n) = show n
@@ -60,11 +60,11 @@ instance Show Datum where
   show (Char c) = "#\\" ++ [c]
   show (String s) = show s
   show (Symbol s) = s
-  show (Cons car cdr) = "(" ++ show car ++ expand cdr ++ ")"
+  show (Pair car cdr) = "(" ++ show car ++ expand cdr ++ ")"
     where
       expand :: Datum -> String
       expand Empty = ""
-      expand (Cons car' cdr') = " " ++ show car' ++ expand cdr'
+      expand (Pair car' cdr') = " " ++ show car' ++ expand cdr'
       expand d = " . " ++ show d
   show Empty = "()"
 
@@ -200,9 +200,9 @@ abbreviation = do
   return $ makeProper [s, d]
 
 makeProper :: [Datum] -> Datum
-makeProper = foldr Cons Empty
+makeProper = foldr Pair Empty
 
 makeImproper :: [Datum] -> Datum -> Datum
 makeImproper [] _ = error "improper list cannot have less than 2 elements"
-makeImproper [x] t = Cons x t
-makeImproper (x : xs) t = Cons x (makeImproper xs t)
+makeImproper [x] t = Pair x t
+makeImproper (x : xs) t = Pair x (makeImproper xs t)
