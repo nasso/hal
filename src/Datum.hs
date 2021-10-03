@@ -1,5 +1,6 @@
 module Datum
   ( datum,
+    Parser,
     Datum (..),
     dBool,
     dNumber,

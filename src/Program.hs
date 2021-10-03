@@ -5,6 +5,8 @@ module Program
     Expression (..),
     Constant (..),
     Formals (..),
+    Var,
+    Parser,
     program,
     form,
   )
@@ -13,7 +15,7 @@ where
 import Control.Applicative
 import Data.List.NonEmpty (NonEmpty (..), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
-import Datum
+import Datum (Datum (..))
 import My.Control.Monad.Trans.ParserT
 
 type Var = String

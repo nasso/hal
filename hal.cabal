@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: a28d2cdac7fcec6ad676ccd12aafde8d8b7d25a2e3f332a52f91bc8b83aa96d0
+-- hash: 0ef195067d5c7b13766f7fca73a386d5362edb62027f2d336892bef6aba9e7d1
 
 name:           hal
 version:        0.1.0.0
@@ -29,6 +29,7 @@ library
   exposed-modules:
       Datum
       Eval
+      Heap
       Lib
       Program
   other-modules:
