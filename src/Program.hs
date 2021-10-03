@@ -69,16 +69,16 @@ proper :: Parser [Datum]
 proper = do
   v <- item
   case v of
-    Cons car cdr -> (car :) . fst <$> exec [cdr] proper
+    Pair car cdr -> (car :) . fst <$> exec [cdr] proper
     Empty -> return []
     _ -> empty
 
 -- | Parse an improper list.
 improper :: Parser (NonEmpty Datum, Datum)
 improper = do
-  Cons car cdr <- item
+  Pair car cdr <- item
   case cdr of
-    cdr'@(Cons _ _) -> do
+    cdr'@(Pair _ _) -> do
       (car', l) <- fst <$> exec [cdr'] improper
       return (car <| car', l)
     cdr' -> return (car :| [], cdr')

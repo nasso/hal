@@ -8,13 +8,22 @@ import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Datum
+import Datum (Datum)
+import qualified Datum
 import Heap (Heap)
 import qualified Heap
 import My.Control.Monad.Trans.ErrorT
 import My.Control.Monad.Trans.ReaderT
 import My.Control.Monad.Trans.StateT
 import Program
+  ( Definition (..),
+    Expression (..),
+    Form (..),
+    Formals (..),
+    Program (..),
+    Var,
+  )
+import qualified Program
 
 -- | The environment maps symbols to values in the heap.
 type Env = Map Var Int
@@ -25,12 +34,58 @@ emptyEnv = Map.empty
 
 -- | Represents any value in the heap.
 data Value
-  = Datum Datum
+  = Bool Bool
+  | Number Double
+  | Char Char
+  | String String
+  | Symbol String
+  | Pair Value Value
+  | Empty
   | Closure Env ([Value] -> Eval Value)
 
 instance Show Value where
-  show (Datum d) = show d
+  show (Pair (Symbol "quote") (Pair v Empty)) = "'" ++ show v
+  show (Pair (Symbol "quasiquote") (Pair v Empty)) = "`" ++ show v
+  show (Pair (Symbol "unquote") (Pair v Empty)) = "," ++ show v
+  show (Pair (Symbol "unquote-splicing") (Pair v Empty)) = ",@" ++ show v
+  show (Pair (Symbol "syntax") (Pair v Empty)) = "#'" ++ show v
+  show (Pair (Symbol "quasisyntax") (Pair v Empty)) = "#`" ++ show v
+  show (Pair (Symbol "unsyntax") (Pair v Empty)) = "#," ++ show v
+  show (Pair (Symbol "unsyntax-splicing") (Pair v Empty)) = "#,@" ++ show v
+  show (Bool True) = "#t"
+  show (Bool False) = "#f"
+  show (Number n) = show n
+  show (Char '\x0007') = "#\\alarm"
+  show (Char '\x0008') = "#\\backspace"
+  show (Char '\x007f') = "#\\delete"
+  show (Char '\x001b') = "#\\esc"
+  show (Char '\x000a') = "#\\newline"
+  show (Char '\x000c') = "#\\page"
+  show (Char '\x000d') = "#\\return"
+  show (Char ' ') = "#\\space"
+  show (Char '\t') = "#\\tab"
+  show (Char '\v') = "#\\vtab"
+  show (Char c) = "#\\" ++ [c]
+  show (String s) = show s
+  show (Symbol s) = s
+  show (Pair car cdr) = "(" ++ show car ++ expand cdr ++ ")"
+    where
+      expand :: Value -> String
+      expand Empty = ""
+      expand (Pair car' cdr') = " " ++ show car' ++ expand cdr'
+      expand d = " . " ++ show d
+  show Empty = "()"
   show (Closure _ _) = "#<procedure>"
+
+valueFromDatum :: Datum -> Value
+valueFromDatum (Datum.Bool b) = Bool b
+valueFromDatum (Datum.Number n) = Number n
+valueFromDatum (Datum.Char c) = Char c
+valueFromDatum (Datum.String s) = String s
+valueFromDatum (Datum.Symbol s) = Symbol s
+valueFromDatum (Datum.Pair car cdr) =
+  Pair (valueFromDatum car) (valueFromDatum cdr)
+valueFromDatum Datum.Empty = Empty
 
 type Eval a = StateT (Heap Value) (ReaderT Env (ErrorT String IO)) a
 
@@ -124,7 +179,7 @@ evalDef b ev = do
   bindings <- mapM (prealloc . fst) pairs
   bindAll bindings (setAllExprs pairs >> ev)
   where
-    prealloc v = (,) v <$> alloc (Datum $ Datum.Bool False)
+    prealloc v = (,) v <$> alloc (Bool False)
     unroll (VarDef n e) = return [(n, e)]
     unroll (Begin ds) = join <$> mapM unroll ds
     setAllExprs [] = return ()
@@ -132,16 +187,16 @@ evalDef b ev = do
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Eval Value
-evalExpr (Lit (Program.Bool b)) = return $ Datum $ Datum.Bool b
-evalExpr (Lit (Program.Number i)) = return $ Datum $ Datum.Number i
-evalExpr (Lit (Program.String s)) = return $ Datum $ Datum.String s
-evalExpr (Lit (Program.Char c)) = return $ Datum $ Datum.Char c
+evalExpr (Lit (Program.Bool b)) = return $ Bool b
+evalExpr (Lit (Program.Number i)) = return $ Number i
+evalExpr (Lit (Program.String s)) = return $ String s
+evalExpr (Lit (Program.Char c)) = return $ Char c
 evalExpr (Sym s) = deref s
-evalExpr (Quote d) = return $ Datum d
+evalExpr (Quote d) = return $ valueFromDatum d
 evalExpr (If cond then' else') = do
   b <- evalExpr cond
   case b of
-    Datum (Datum.Bool False) -> evalExpr else'
+    Bool False -> evalExpr else'
     _ -> evalExpr then'
 evalExpr (Set var expr) = do
   val <- evalExpr expr
