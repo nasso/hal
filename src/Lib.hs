@@ -22,7 +22,7 @@ parseAst p s = do
   (ast, []) <- runParserT p ds
   return ast
 
-withFormStr :: String -> Eval (Maybe Value -> a) -> Eval a
+withFormStr :: String -> (Maybe Value -> Eval a) -> Eval a
 withFormStr s e = case parseAst Program.form s of
   Nothing -> throwError "Syntax error"
   Just f -> evalForm f e

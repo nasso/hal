@@ -3,6 +3,7 @@ module Main where
 import Control.Monad
 import Eval
 import Lib
+import My.Control.Monad.Trans.ErrorT
 import My.Control.Monad.Trans.IO
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -50,17 +51,21 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " --help"
 
 vm :: [FilePath] -> Bool -> Eval ()
-vm files i = withStdLib (withFiles files $ when i repl)
+vm files i = {- withStdLib $ -} withFiles files $ when i repl
 
 repl :: Eval ()
 repl = do
   line <- liftIO $ prompt >> getLine
   if line == ":quit"
     then return ()
-    else void $ withFormStr line (return id) >>= liftIO . printM
+    else evalAndPrint line
+
+evalAndPrint :: String -> Eval ()
+evalAndPrint s = withFormStr s displayAndLoop `catchError` displayError
   where
-    printM Nothing = return ()
-    printM (Just m) = print m
+    displayAndLoop Nothing = repl
+    displayAndLoop (Just v) = liftIO (print v) >> repl
+    displayError msg = liftIO (ePutStrLn msg) >> repl
 
 prompt :: IO ()
 prompt = putStr "> " >> hFlush stdout

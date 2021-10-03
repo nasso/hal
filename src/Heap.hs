@@ -4,6 +4,7 @@ module Heap
     store,
     alloc,
     free,
+    fetch,
   )
 where
 
@@ -22,12 +23,12 @@ empty :: Heap a
 empty = Heap IntMap.empty []
 
 -- | Store a value in the heap.
-store :: Heap a -> Int -> a -> Heap a
-store heap key value = heap {values = IntMap.insert key value (values heap)}
+store :: Int -> a -> Heap a -> Heap a
+store key value heap = heap {values = IntMap.insert key value (values heap)}
 
 -- | Allocate a new slot in the heap.
-alloc :: Heap a -> a -> (Int, Heap a)
-alloc h v =
+alloc :: a -> Heap a -> (Int, Heap a)
+alloc v h =
   case freedSlots h of
     (k : ks) -> (k, h {values = IntMap.insert k v (values h), freedSlots = ks})
     [] ->
@@ -35,9 +36,13 @@ alloc h v =
        in (k, h {values = IntMap.insert k v (values h)})
 
 -- | Free a slot in the heap.
-free :: Heap a -> Int -> Heap a
-free h k =
+free :: Int -> Heap a -> Heap a
+free k h =
   h
     { values = IntMap.delete k (values h),
       freedSlots = k : freedSlots h
     }
+
+-- | Fetch a value from the heap.
+fetch :: Int -> Heap a -> Maybe a
+fetch k h = IntMap.lookup k (values h)
