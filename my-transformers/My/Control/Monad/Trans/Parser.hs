@@ -9,24 +9,14 @@ module My.Control.Monad.Trans.Parser
     like,
     oneOf,
     noneOf,
-    literal,
+    string,
     chainl1,
     chainr1,
-    char,
-    space,
-    digit,
-    lower,
-    upper,
-    alpha,
-    alphanum,
-    lexeme,
-    symbol,
   )
 where
 
 import Control.Applicative (Alternative (empty, many, (<|>)), (<**>))
 import Control.Monad (MonadPlus)
-import Data.Char (isAlpha, isAlphaNum, isDigit, isLower, isSpace, isUpper)
 
 -- | A monad that parses a stream of tokens.
 class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
@@ -68,9 +58,9 @@ noneOf :: (Eq t, MonadParser t m) => [t] -> m t
 noneOf l = match (`notElem` l)
 
 -- | Parse a continuous sequence of tokens equal to the given one.
-literal :: (Eq t, MonadParser t m) => [t] -> m [t]
-literal [] = return []
-literal (x : xs) = like x >> literal xs >> return (x : xs)
+string :: (Eq t, MonadParser t m) => [t] -> m [t]
+string [] = return []
+string (x : xs) = like x >> string xs >> return (x : xs)
 
 -- | `chainl1 p op` Parse a chain of *one* or more occurrences of `p`,
 -- separated by `op`. Return a value obtained by a left associative application
@@ -93,39 +83,3 @@ chainr1 p op = scan
   where
     scan = p <**> rst
     rst = (flip <$> op <*> scan) <|> pure id
-
--- | Parse a char equal to @c@.
-char :: MonadParser Char m => Char -> m Char
-char = like
-
--- | Parse a unicode whitespace character (space, tab, newline, etc.).
-space :: MonadParser Char m => m Char
-space = match isSpace
-
--- | Parse a decimal digit.
-digit :: MonadParser Char m => m Char
-digit = match isDigit
-
--- | Parse a lowercase letter.
-lower :: MonadParser Char m => m Char
-lower = match isLower
-
--- | Parse an uppercase letter.
-upper :: MonadParser Char m => m Char
-upper = match isUpper
-
--- | Parse any letter.
-alpha :: MonadParser Char m => m Char
-alpha = match isAlpha
-
--- | Parse any letter or digit.
-alphanum :: MonadParser Char m => m Char
-alphanum = match isAlphaNum
-
--- | Make a parser consume any trailing whitespace.
-lexeme :: MonadParser Char m => m a -> m a
-lexeme p = p <* many space
-
--- | Parse exactly the given string and discard any trailing whitespace.
-symbol :: MonadParser Char m => String -> m String
-symbol = lexeme . literal

@@ -10,11 +10,14 @@ where
 
 import Control.Applicative
 import Control.Monad
+import Data.Fixed
+import Data.Ratio (denominator, numerator)
 import Datum (datum)
 import Eval
 import My.Control.Monad.Trans.ExceptT
 import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.ParserT
+import Number
 import Program (Parser, Var, form, program)
 
 parseAst :: Program.Parser a -> String -> Maybe a
@@ -138,8 +141,8 @@ builtinArithmetics =
     ("-", procedure (fmap Number . builtinDiff)),
     ("*", procedure (fmap Number . builtinProd)),
     ("/", procedure (fmap Number . builtinDiv)),
-    ("div", procedure (fmap Number . builtinQuot)),
-    ("mod", procedure (fmap Number . builtinMod))
+    ("div", procedure (fmap Number . buildinDiv)),
+    ("mod", procedure (fmap Number . buildinMod))
   ]
     ++ builtinNumComparisons
 
@@ -152,7 +155,7 @@ builtinNumComparisons =
     (">=", procedure (fmap Bool . builtinOrd (>=)))
   ]
 
-builtinOrd :: (Double -> Double -> Bool) -> [Value] -> Eval Bool
+builtinOrd :: (Number -> Number -> Bool) -> [Value] -> Eval Bool
 builtinOrd cmp [Number a, Number b] =
   return $ cmp a b
 builtinOrd cmp (Number a : Number b : xs) = do
@@ -160,14 +163,14 @@ builtinOrd cmp (Number a : Number b : xs) = do
   return $ v && cmp a b
 builtinOrd _ _ = throwError "ord: invalid arguments"
 
-builtinSum :: [Value] -> Eval Double
+builtinSum :: [Value] -> Eval Number
 builtinSum [] = return 0
 builtinSum [Number n] = return n
 builtinSum (Number a : Number b : xs) =
   builtinSum (Number (a + b) : xs)
 builtinSum _ = throwError "+: invalid arguments"
 
-builtinDiff :: [Value] -> Eval Double
+builtinDiff :: [Value] -> Eval Number
 builtinDiff [] = throwError "-: not enough arguments"
 builtinDiff [Number n] = return (- n)
 builtinDiff (Number n : xs) = do
@@ -175,14 +178,14 @@ builtinDiff (Number n : xs) = do
   return (n - s)
 builtinDiff _ = throwError "-: invalid arguments"
 
-builtinProd :: [Value] -> Eval Double
+builtinProd :: [Value] -> Eval Number
 builtinProd [] = return 1
 builtinProd [Number n] = return n
 builtinProd (Number a : Number b : xs) =
   builtinProd (Number (a * b) : xs)
 builtinProd _ = throwError "*: invalid arguments"
 
-builtinDiv :: [Value] -> Eval Double
+builtinDiv :: [Value] -> Eval Number
 builtinDiv [] = throwError "/: not enough arguments"
 builtinDiv [Number n] = return (1 / n)
 builtinDiv (Number n : xs) = do
@@ -190,18 +193,58 @@ builtinDiv (Number n : xs) = do
   return (n / p)
 builtinDiv _ = throwError "/: invalid arguments"
 
-builtinQuot :: [Value] -> Eval Double
-builtinQuot [Number a, Number b] =
-  return $ fromIntegral $ a' `quot` b'
-  where
-    a' = truncate a :: Integer
-    b' = truncate b :: Integer
-builtinQuot _ = throwError "div: invalid arguments"
+buildinDiv :: [Value] -> Eval Number
+buildinDiv [Number _, Number 0] = throwError "div: undefined for 0"
+buildinDiv [Number a, Number b] = fst <$> divAndMod a b
+buildinDiv _ = throwError "div: invalid arguments"
 
-builtinMod :: [Value] -> Eval Double
-builtinMod [Number a, Number b] =
-  return $ fromIntegral $ a' `rem` b'
+buildinMod :: [Value] -> Eval Number
+buildinMod [Number _, Number 0] = throwError "mod: undefined for 0"
+buildinMod [Number a, Number b] = snd <$> divAndMod a b
+buildinMod _ = throwError "mod: invalid arguments"
+
+divAndMod :: Number -> Number -> Eval (Number, Number)
+divAndMod _ 0 = throwError "divAndMod: undefined for 0"
+divAndMod (Exact x1) (Exact x2) =
+  return (Exact q, Exact r)
   where
-    a' = truncate a :: Integer
-    b' = truncate b :: Integer
-builtinMod _ = throwError "mod: invalid arguments"
+    (q, r) = x1 `calcDivMod` x2
+divAndMod (Ratio x1) (Ratio x2) = x1' `Lib.divAndMod` x2'
+  where
+    r = x1 / x2
+    x1' = Exact $ numerator r
+    x2' = Exact $ denominator r
+divAndMod (Exact x1) x2@(Ratio _) = Ratio (fromIntegral x1) `Lib.divAndMod` x2
+divAndMod x1@(Ratio _) (Exact x2) = x1 `Lib.divAndMod` Ratio (fromIntegral x2)
+divAndMod (Inexact x1) (Inexact x2) =
+  return (Inexact q, Inexact r)
+  where
+    (q', r) = x1 `calcDivMod'` x2
+    q = fromInteger q'
+divAndMod (Exact x1) x2 = Inexact (fromIntegral x1) `Lib.divAndMod` x2
+divAndMod (Ratio x1) x2 = Inexact (fromRational x1) `Lib.divAndMod` x2
+divAndMod x1 (Exact x2) = x1 `Lib.divAndMod` Inexact (fromIntegral x2)
+divAndMod x1 (Ratio x2) = x1 `Lib.divAndMod` Inexact (fromRational x2)
+
+-- | Perform integer division on x1 and x2, such that the remainder is always
+-- positive
+calcDivMod :: (Integral a) => a -> a -> (a, a)
+calcDivMod n d =
+  if r < 0
+    then (q - ds, r + abs d)
+    else (q, r)
+  where
+    q = div n d
+    r = n - q * d
+    ds = signum d
+
+-- | Generalization of @calcDivMod@ for Real types.
+calcDivMod' :: (Real a, Integral b) => a -> a -> (b, a)
+calcDivMod' n d =
+  if r < 0
+    then (q - ds, r + abs d)
+    else (q, r)
+  where
+    q = div' n d
+    r = n - fromIntegral q * d
+    ds = if d < 0 then -1 else 1

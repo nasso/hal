@@ -15,7 +15,7 @@ where
 import Control.Applicative
 import Data.List.NonEmpty (NonEmpty (..), (<|))
 import qualified Data.List.NonEmpty as NonEmpty
-import Datum (Datum (..))
+import Datum (Constant (..), Datum (..))
 import My.Control.Monad.Trans.ParserT
 
 type Var = String
@@ -34,7 +34,6 @@ data Definition
 
 data Expression
   = Lit Constant
-  | Sym Var
   | Quote Datum
   | Lambda Formals (NonEmpty Expression)
   | If Expression Expression Expression
@@ -42,27 +41,25 @@ data Expression
   | Application Expression [Expression]
   deriving (Eq, Show)
 
-data Constant
-  = Bool Bool
-  | Number Double
-  | Char Char
-  | String String
-  deriving (Eq, Show)
-
 data Formals
-  = Exact [Var]
+  = Strict [Var]
   | Variadic [Var] Var
   deriving (Eq, Show)
 
 type Parser a = ParserT Datum Maybe a
 
+constant :: Parser Constant
+constant = do
+  Lexeme c <- item
+  return c
+
 var :: Parser Var
 var = do
-  Symbol s <- item
+  Sym s <- constant
   return s
 
 sym :: String -> Parser Datum
-sym = like . Symbol
+sym = like . Lexeme . Sym
 
 -- | Parse a proper list.
 proper :: Parser [Datum]
@@ -113,7 +110,6 @@ definition =
 expression :: Parser Expression
 expression =
   Lit <$> constant
-    <|> Sym <$> var
     <|> properP
       ( Quote <$> (sym "quote" *> item)
           <|> Lambda <$> (sym "lambda" *> formals) <*> NonEmpty.some1 expression
@@ -122,15 +118,8 @@ expression =
           <|> Application <$> expression <*> many expression
       )
 
-constant :: Parser Constant
-constant =
-  do Datum.Bool b <- item; return $ Program.Bool b
-    <|> do Datum.Number n <- item; return $ Program.Number n
-    <|> do Datum.Char c <- item; return $ Program.Char c
-    <|> do Datum.String s <- item; return $ Program.String s
-
 formals :: Parser Formals
 formals =
   Variadic [] <$> var
-    <|> Exact <$> properP (many var)
+    <|> Strict <$> properP (many var)
     <|> uncurry Variadic <$> improperP (many var) var

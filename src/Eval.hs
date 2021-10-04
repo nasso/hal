@@ -15,6 +15,7 @@ import qualified Heap
 import My.Control.Monad.Trans.ExceptT
 import My.Control.Monad.Trans.ReaderT
 import My.Control.Monad.Trans.StateT
+import Number
 import Program
   ( Definition (..),
     Expression (..),
@@ -23,7 +24,6 @@ import Program
     Program (..),
     Var,
   )
-import qualified Program
 
 -- | The environment maps symbols to values in the heap.
 type Env = Map Var Int
@@ -35,7 +35,7 @@ emptyEnv = Map.empty
 -- | Represents any value in the heap.
 data Value
   = Bool Bool
-  | Number Double
+  | Number Number
   | Char Char
   | String String
   | Symbol String
@@ -78,11 +78,11 @@ instance Show Value where
   show (Closure _ _) = "#<procedure>"
 
 valueFromDatum :: Datum -> Value
-valueFromDatum (Datum.Bool b) = Bool b
-valueFromDatum (Datum.Number n) = Number n
-valueFromDatum (Datum.Char c) = Char c
-valueFromDatum (Datum.String s) = String s
-valueFromDatum (Datum.Symbol s) = Symbol s
+valueFromDatum (Datum.Lexeme (Datum.Bool b)) = Bool b
+valueFromDatum (Datum.Lexeme (Datum.Number n)) = Number n
+valueFromDatum (Datum.Lexeme (Datum.Char c)) = Char c
+valueFromDatum (Datum.Lexeme (Datum.String s)) = String s
+valueFromDatum (Datum.Lexeme (Datum.Sym s)) = Symbol s
 valueFromDatum (Datum.Pair car cdr) =
   Pair (valueFromDatum car) (valueFromDatum cdr)
 valueFromDatum Datum.Empty = Empty
@@ -208,11 +208,8 @@ evalDef b ev = do
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Eval Value
-evalExpr (Lit (Program.Bool b)) = return $ Bool b
-evalExpr (Lit (Program.Number i)) = return $ Number i
-evalExpr (Lit (Program.String s)) = return $ String s
-evalExpr (Lit (Program.Char c)) = return $ Char c
-evalExpr (Sym s) = deref s
+evalExpr (Lit (Datum.Sym s)) = deref s
+evalExpr (Lit c) = return $ valueFromDatum $ Datum.Lexeme c
 evalExpr (Quote d) = return $ valueFromDatum d
 evalExpr (If cond then' else') = do
   b <- evalExpr cond
@@ -237,10 +234,11 @@ evalExpr (Application funExpr argExprs) = do
 
 -- | Bind the formals of a lambda expression some addresses.
 bindFormals :: Formals -> [Int] -> Eval a -> Eval a
-bindFormals (Exact []) [] e = e
-bindFormals (Exact []) _ _ = throwError "too many arguments"
-bindFormals (Exact _) [] _ = throwError "not enough arguments"
-bindFormals (Exact (p : ps)) (a : as) e = bind p a $ bindFormals (Exact ps) as e
+bindFormals (Strict []) [] e = e
+bindFormals (Strict []) _ _ = throwError "too many arguments"
+bindFormals (Strict _) [] _ = throwError "not enough arguments"
+bindFormals (Strict (p : ps)) (a : as) e =
+  bind p a $ bindFormals (Strict ps) as e
 bindFormals (Variadic [] ps) as e = do
   avs <- fetchAll as
   define ps (foldr Pair Empty avs) e
