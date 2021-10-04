@@ -41,7 +41,7 @@ data Value
   | Symbol String
   | Pair Value Value
   | Empty
-  | Closure Env ([Value] -> Eval Value)
+  | Closure Env ([Int] -> Eval Value)
 
 instance Show Value where
   show (Pair (Symbol "quote") (Pair v Empty)) = "'" ++ show v
@@ -136,8 +136,29 @@ fetch a = do
     Just v' -> return v'
     Nothing -> throwError "Segmentation fault."
 
+-- | Fetch a list of values from the heap.
+fetchAll :: [Int] -> Eval [Value]
+fetchAll [] = return []
+fetchAll (a : as) = do
+  v <- fetch a
+  vs <- fetchAll as
+  return (v : vs)
+
+-- | Assign a value to a heap address.
 store :: Value -> Int -> Eval ()
 store v a = modify (Heap.store a v)
+
+-- | Clone a value in the heap and return the address of the clone.
+clone :: Int -> Eval Int
+clone a = fetch a >>= alloc
+
+-- | Clone a list of values in the heap and return the addresses of the clones.
+cloneAll :: [Int] -> Eval [Int]
+cloneAll [] = return []
+cloneAll (a : as) = do
+  a' <- clone a
+  as' <- cloneAll as
+  return (a' : as')
 
 -- | Get the address of a variable in the environment.
 ref :: Var -> Eval Int
@@ -204,12 +225,12 @@ evalExpr (Set var expr) = do
 evalExpr (Lambda formals body) = do
   env <- ask -- capture the environment
   return $ -- create a closure
-    Closure env $ \args -> do
-      addrs <- allocAll args -- box all arguments
-      bindFormals formals addrs $ evalBody body -- bind args and eval the body
+    Closure env $ \args ->
+      bindFormals formals args $ evalBody body -- bind args and eval the body
 evalExpr (Application funExpr argExprs) = do
   val <- evalExpr funExpr
-  args <- mapM evalExpr argExprs
+  -- clone all arguments (call-by-value)
+  args <- mapM evalExpr argExprs >>= allocAll
   case val of
     Closure env fn -> local (const env) $ fn args
     _ -> throwError "not a procedure"
@@ -220,7 +241,13 @@ bindFormals (Exact []) [] e = e
 bindFormals (Exact []) _ _ = throwError "too many arguments"
 bindFormals (Exact _) [] _ = throwError "not enough arguments"
 bindFormals (Exact (p : ps)) (a : as) e = bind p a $ bindFormals (Exact ps) as e
-bindFormals (Variadic _ _) _ _ = error "variadics not supported"
+bindFormals (Variadic [] ps) as e = do
+  avs <- fetchAll as
+  define ps (foldr Pair Empty avs) e
+bindFormals (Variadic (p : ps) ps') (a : as) e = do
+  av <- fetch a
+  define p av $ bindFormals (Variadic ps ps') as e
+bindFormals (Variadic _ _) [] _ = throwError "not enough arguments"
 
 -- | Evaluates a body, that is, a sequence of expresion, and returns the value
 -- of the last expression.

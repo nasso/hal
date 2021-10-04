@@ -9,6 +9,7 @@ module Lib
 where
 
 import Control.Applicative
+import Control.Monad
 import Datum (datum)
 import Eval
 import My.Control.Monad.Trans.ErrorT
@@ -47,7 +48,7 @@ withBuiltins :: Eval a -> Eval a
 withBuiltins = defineAll builtins
 
 procedure :: ([Value] -> Eval Value) -> Value
-procedure = Closure emptyEnv
+procedure f = Closure emptyEnv (fetchAll >=> f)
 
 builtins :: [(Var, Value)]
 builtins = builtinList ++ builtinPredicates ++ builtinArithmetics
@@ -73,8 +74,7 @@ builtinCdr _ = throwError "cdr: invalid arguments"
 
 builtinPredicates :: [(Var, Value)]
 builtinPredicates =
-  [ ("eqv?", procedure (fmap Bool . builtinEqv)),
-    ("eq?", procedure (fmap Bool . builtinEq)),
+  [ ("eq?", Closure emptyEnv (fmap Bool . builtinEq)),
     ("boolean?", procedure (fmap Bool . builtinIsBool)),
     ("number?", procedure (fmap Bool . builtinIsNumber)),
     ("symbol?", procedure (fmap Bool . builtinIsSymbol)),
@@ -119,23 +119,18 @@ builtinIsNull [Empty] = return True
 builtinIsNull [_] = return False
 builtinIsNull _ = throwError "null?: invalid arguments"
 
-builtinEq :: [Value] -> Eval Bool
-builtinEq [Empty, Empty] = return True
-builtinEq [Char c, Char c'] = return $ c == c'
-builtinEq [Number n, Number n'] = return $ n == n'
-builtinEq [Bool b, Bool b'] = return $ b == b'
-builtinEq [String s, String s'] = return $ s == s'
-builtinEq [Symbol s, Symbol s'] = return $ s == s'
-builtinEq [_, _] = return False
+builtinEq :: [Int] -> Eval Bool
+builtinEq [a, b] | a == b = return True
+builtinEq [a', b'] = cmp <$> fetch a' <*> fetch b'
+  where
+    cmp Empty Empty = True
+    cmp (Number a) (Number b) = a == b
+    cmp (Bool a) (Bool b) = a == b
+    cmp (Char a) (Char b) = a == b
+    cmp (String a) (String b) = a == b
+    cmp (Symbol a) (Symbol b) = a == b
+    cmp _ _ = False
 builtinEq _ = throwError "eq?: invalid arguments"
-
-builtinEqv :: [Value] -> Eval Bool
-builtinEqv [Pair a b, Pair a' b'] = do
-  aEqv <- builtinEqv [a, a']
-  bEqv <- builtinEqv [b, b']
-  return $ aEqv && bEqv
-builtinEqv [a, b] = builtinEq [a, b]
-builtinEqv _ = throwError "eqv?: invalid arguments"
 
 builtinArithmetics :: [(Var, Value)]
 builtinArithmetics =
