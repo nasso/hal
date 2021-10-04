@@ -1,10 +1,10 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.33.0.
+-- This file has been generated from package.yaml by hpack version 0.34.4.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 0ef195067d5c7b13766f7fca73a386d5362edb62027f2d336892bef6aba9e7d1
+-- hash: 665dd3328e08ce4e8fc668ac01839cadd7ce719d43e8e49ff677e9227265e4a7
 
 name:           hal
 version:        0.1.0.0
@@ -39,7 +39,7 @@ library
   ghc-options: -Wall
   build-depends:
       base >=4.7 && <5
-    , containers >=0.6 && <0.7
+    , containers ==0.6.*
     , my-transformers
   default-language: Haskell2010
 
@@ -52,7 +52,7 @@ executable hal
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
-    , containers >=0.6 && <0.7
+    , containers ==0.6.*
     , hal
     , my-transformers
   default-language: Haskell2010
@@ -68,7 +68,7 @@ test-suite hal-test
   build-depends:
       QuickCheck
     , base >=4.7 && <5
-    , containers >=0.6 && <0.7
+    , containers ==0.6.*
     , hal
     , my-transformers
   default-language: Haskell2010
