@@ -12,7 +12,7 @@ import Datum (Datum)
 import qualified Datum
 import Heap (Heap)
 import qualified Heap
-import My.Control.Monad.Trans.ErrorT
+import My.Control.Monad.Trans.ExceptT
 import My.Control.Monad.Trans.ReaderT
 import My.Control.Monad.Trans.StateT
 import Program
@@ -87,7 +87,7 @@ valueFromDatum (Datum.Pair car cdr) =
   Pair (valueFromDatum car) (valueFromDatum cdr)
 valueFromDatum Datum.Empty = Empty
 
-type Eval a = StateT (Heap Value) (ReaderT Env (ErrorT String IO)) a
+type Eval a = StateT (Heap Value) (ReaderT Env (ExceptT String IO)) a
 
 runEval :: Eval a -> IO (Either String a)
 runEval e = do

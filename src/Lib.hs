@@ -12,7 +12,7 @@ import Control.Applicative
 import Control.Monad
 import Datum (datum)
 import Eval
-import My.Control.Monad.Trans.ErrorT
+import My.Control.Monad.Trans.ExceptT
 import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.ParserT
 import Program (Parser, Var, form, program)

@@ -12,7 +12,7 @@ import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import Data.Bifunctor (Bifunctor (first))
 import My.Control.Monad.Trans (MonadTrans (..))
-import My.Control.Monad.Trans.Error
+import My.Control.Monad.Trans.Except
 import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.Parser
 import My.Control.Monad.Trans.Reader
@@ -53,7 +53,7 @@ instance MonadTrans (StateT s) where
 instance MonadIO m => MonadIO (StateT s m) where
   liftIO = lift . liftIO
 
-instance MonadError e m => MonadError e (StateT s m) where
+instance MonadExcept e m => MonadExcept e (StateT s m) where
   throwError e = StateT $ \_ -> throwError e
   catchError st f =
     StateT $ \s -> catchError (runStateT st s) (flip runStateT s . f)
