@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 665dd3328e08ce4e8fc668ac01839cadd7ce719d43e8e49ff677e9227265e4a7
+-- hash: 50c7317bdc3d7058f5d2d6d67c2ffd6be466d71b8e43f759f87922904e1aa381
 
 name:           hal
 version:        0.1.0.0
@@ -31,6 +31,7 @@ library
       Eval
       Heap
       Lib
+      Number
       Program
   other-modules:
       Paths_hal
