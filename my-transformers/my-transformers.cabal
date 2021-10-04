@@ -16,7 +16,7 @@ library
   hs-source-dirs:      .
   exposed-modules:
     My.Control.Monad.Trans
-    My.Control.Monad.Trans.ErrorT
+    My.Control.Monad.Trans.ExceptT
     My.Control.Monad.Trans.IdentityT
     My.Control.Monad.Trans.MaybeT
     My.Control.Monad.Trans.ParserT
@@ -24,7 +24,7 @@ library
     My.Control.Monad.Trans.StateT
     My.Control.Monad.Trans.IO
   other-modules:
-    My.Control.Monad.Trans.Error
+    My.Control.Monad.Trans.Except
     My.Control.Monad.Trans.Parser
     My.Control.Monad.Trans.Reader
     My.Control.Monad.Trans.State

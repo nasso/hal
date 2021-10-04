@@ -11,7 +11,7 @@ where
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import My.Control.Monad.Trans (MonadTrans (..))
-import My.Control.Monad.Trans.Error
+import My.Control.Monad.Trans.Except
 import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.Parser
 import My.Control.Monad.Trans.Reader
@@ -56,7 +56,7 @@ instance MonadState s m => MonadState s (ReaderT r m) where
   get = lift get
   put s = lift $ put s
 
-instance MonadError e m => MonadError e (ReaderT r m) where
+instance MonadExcept e m => MonadExcept e (ReaderT r m) where
   throwError e = ReaderT $ \_ -> throwError e
   catchError m f = ReaderT $ \r ->
     runReaderT m r `catchError` \e -> runReaderT (f e) r
