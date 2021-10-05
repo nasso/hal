@@ -1,3 +1,16 @@
+#|
+    This Scheme program will run a series of tests on the implementation of the
+    language runtime.
+
+    #| Nesting comments is part of the test suite! |#
+
+    (display "This shouldn't be displayed. Do you support nested comments?")
+;|#
+
+#;
+    (display "This shouldn't be displayed. Do you support datum comments (#;)?")
+
+; Wraps a function to be run as a test case as part of a test suite.
 (define test (lambda (name fn)
     (lambda ()
         ((lambda (success)
@@ -12,6 +25,7 @@
     )
 ))
 
+; Defines a test suite.
 (define suite (lambda (name . tests)
     (lambda (on-pass on-fail)
         (display "[")
@@ -37,6 +51,7 @@
     )
 ))
 
+; Run a series of test suites and display a summary.
 (define test-suites (lambda suites
     ((lambda (passes fails)
         (
@@ -65,6 +80,7 @@
     ) 0 0)
 ))
 
+; Procedural replacement for the `and` syntax.
 (define andproc (lambda vs
     (
         (lambda (f) (f f vs))
@@ -80,6 +96,7 @@
     )
 ))
 
+; Factorial function.
 (define fact (lambda (x)
     (if (eq? x 0)
         1
@@ -87,6 +104,7 @@
     )
 ))
 
+; Fibonacci function.
 (define fib (lambda (n)
     (if (eq? n 0)
         0

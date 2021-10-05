@@ -23,9 +23,26 @@ import Numeric (readDec, readHex, readInt, readOct)
 -- | A parser from `String` to values of type `a`.
 type Parser a = ParserT Char Maybe a
 
+-- | Parse a continuous sequence of items not containing the given string.
+commentText :: Parser ()
+commentText =
+  many (noneOf "#|")
+    >> ( do
+           i <- item
+           unlike (if i == '#' then '|' else '#') >> commentText
+       )
+    <|> pure ()
+
 -- | Make a parser consume any trailing whitespace.
 lexeme :: Parser a -> Parser a
-lexeme p = many (match isSpace) *> p <* many (match isSpace)
+lexeme p = many atmosphere *> p <* many atmosphere
+  where
+    atmosphere = void (match isSpace) <|> comment
+    comment = lineComment <|> nestedComment <|> datumComment
+    lineComment = like ';' >> many (match (/= '\n')) >> like '\n' $> ()
+    nestedComment = string "#|" *> commentText <* commentCont <* string "|#"
+    commentCont = many (nestedComment *> commentText)
+    datumComment = string "#;" >> many atmosphere >> datum $> ()
 
 -- | Parse exactly the given string and discard any trailing whitespace.
 symbol :: String -> Parser String

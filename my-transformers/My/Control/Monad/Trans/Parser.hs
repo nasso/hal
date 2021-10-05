@@ -7,6 +7,7 @@ module My.Control.Monad.Trans.Parser
     match,
     sepBy,
     like,
+    unlike,
     oneOf,
     noneOf,
     string,
@@ -18,12 +19,12 @@ where
 import Control.Applicative (Alternative (empty, many, (<|>)), (<**>))
 import Control.Monad (MonadPlus)
 
--- | A monad that parses a stream of tokens.
+-- | A monad that parses a stream of items.
 class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
   -- | Parse the next item.
   item :: m t
 
-  -- | Run a parser on a different stream of tokens.
+  -- | Run a parser on a different stream of items.
   exec :: [t] -> m a -> m (a, [t])
 
 -- | Parse the end of the stream.
@@ -49,6 +50,10 @@ sepBy w s = do
 like :: (Eq t, MonadParser t m) => t -> m t
 like a = match (== a)
 
+-- | Parse any value not equal to `a`.
+unlike :: (Eq t, MonadParser t m) => t -> m t
+unlike a = match (/= a)
+
 -- | Parse any value equal to at least one element of the given list.
 oneOf :: (Eq t, MonadParser t m) => [t] -> m t
 oneOf l = match (`elem` l)
@@ -57,7 +62,7 @@ oneOf l = match (`elem` l)
 noneOf :: (Eq t, MonadParser t m) => [t] -> m t
 noneOf l = match (`notElem` l)
 
--- | Parse a continuous sequence of tokens equal to the given one.
+-- | Parse a continuous sequence of items equal to the given one.
 string :: (Eq t, MonadParser t m) => [t] -> m [t]
 string [] = return []
 string (x : xs) = like x >> string xs >> return (x : xs)
