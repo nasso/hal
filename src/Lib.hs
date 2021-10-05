@@ -11,6 +11,7 @@ where
 import Control.Applicative
 import Control.Monad
 import Data.Fixed
+import Data.Functor
 import Data.Ratio (denominator, numerator)
 import Datum (datum)
 import My.Control.Monad.Trans.ExceptT
@@ -66,6 +67,7 @@ pureFunc f = Closure emptyEnv (fetchAll >=> f)
 builtins :: [(Var, Value)]
 builtins =
   builtinList ++ builtinPredicates ++ builtinArithmetics
+    ++ builtinIO
     ++ builtinUtils
 
 builtinList :: [(Var, Value)]
@@ -138,6 +140,7 @@ builtinEq :: [Int] -> Eval Bool
 builtinEq [a, b] | a == b = return True
 builtinEq [a', b'] = cmp <$> fetch a' <*> fetch b'
   where
+    cmp Void Void = True
     cmp Empty Empty = True
     cmp (Number a) (Number b) = a == b
     cmp (Bool a) (Bool b) = a == b
@@ -261,12 +264,72 @@ calcDivMod' n d =
     r = n - fromIntegral q * d
     ds = if d < 0 then -1 else 1
 
+-- | Builtin I/O procedures
+builtinIO :: [(Var, Value)]
+builtinIO =
+  [ ("display", pureFunc builtinDisplay),
+    ("newline", pureFunc builtinNewline)
+  ]
+
+-- | Builtin display procedure
+builtinDisplay :: [Value] -> Eval Value
+builtinDisplay [String s] = liftIO (putStr s) $> Void
+builtinDisplay [Symbol s] = liftIO (putStr s) $> Void
+builtinDisplay [Char c] = liftIO (putChar c) $> Void
+builtinDisplay [Pair (Symbol "quote") (Pair v Empty)] =
+  liftIO (putStr "'") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "quasiquote") (Pair v Empty)] =
+  liftIO (putStr "`") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "unquote") (Pair v Empty)] =
+  liftIO (putStr ",") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "unquote-splicing") (Pair v Empty)] =
+  liftIO (putStr ",@") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "syntax") (Pair v Empty)] =
+  liftIO (putStr "#'") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "quasisyntax") (Pair v Empty)] =
+  liftIO (putStr "#`") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "unsyntax") (Pair v Empty)] =
+  liftIO (putStr "#,") >> builtinDisplay [v]
+builtinDisplay [Pair (Symbol "unsyntax-splicing") (Pair v Empty)] =
+  liftIO (putStr "#,@") >> builtinDisplay [v]
+builtinDisplay [Pair car cdr] =
+  liftIO (putChar '(')
+    >> builtinDisplay [car]
+    >> expand cdr
+    >> liftIO (putChar ')')
+    $> Void
+  where
+    expand Empty = pure Void
+    expand (Pair car' cdr') =
+      liftIO (putChar ' ') >> builtinDisplay [car'] >> expand cdr'
+    expand d = liftIO (putStr " . ") >> builtinDisplay [d]
+builtinDisplay [x] = liftIO (putStr $ show x) $> Void
+builtinDisplay _ = throwError "display: invalid arguments"
+
+-- | Builtin newline procedure
+builtinNewline :: [Value] -> Eval Value
+builtinNewline [] = liftIO (putStrLn "") $> Void
+builtinNewline _ = throwError "newline: invalid arguments"
+
 -- | Utility procedures
 builtinUtils :: [(Var, Value)]
 builtinUtils =
-  [ ("dump-heap", pureFunc builtinDumpHeap)
+  [ ("void", pureFunc builtinVoid),
+    ("error", pureFunc builtinError),
+    ("dump-heap", pureFunc builtinDumpHeap)
   ]
 
+-- | Builtin "void" procedure
+builtinVoid :: [Value] -> Eval Value
+builtinVoid [] = pure Void
+builtinVoid _ = throwError "void: invalid arguments"
+
+-- | Builtin "error" procedure
+builtinError :: [Value] -> Eval Value
+builtinError (String who : String msg : _) = throwError $ who ++ ": " ++ msg
+builtinError _ = throwError "error: invalid arguments"
+
+-- | Builtin "dump-heap" procedure
 builtinDumpHeap :: [Value] -> Eval Value
 builtinDumpHeap [] = get >>= (liftIO . print) >> return Empty
 builtinDumpHeap _ = throwError "dump-heap: too many arguments"
