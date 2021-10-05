@@ -64,7 +64,9 @@ pureFunc :: ([Value] -> Eval Value) -> Value
 pureFunc f = Closure emptyEnv (fetchAll >=> f)
 
 builtins :: [(Var, Value)]
-builtins = builtinList ++ builtinPredicates ++ builtinArithmetics
+builtins =
+  builtinList ++ builtinPredicates ++ builtinArithmetics
+    ++ builtinUtils
 
 builtinList :: [(Var, Value)]
 builtinList =
@@ -258,3 +260,13 @@ calcDivMod' n d =
     q = div' n d
     r = n - fromIntegral q * d
     ds = if d < 0 then -1 else 1
+
+-- | Utility procedures
+builtinUtils :: [(Var, Value)]
+builtinUtils =
+  [ ("dump-heap", pureFunc builtinDumpHeap)
+  ]
+
+builtinDumpHeap :: [Value] -> Eval Value
+builtinDumpHeap [] = get >>= (liftIO . print) >> return Empty
+builtinDumpHeap _ = throwError "dump-heap: too many arguments"
