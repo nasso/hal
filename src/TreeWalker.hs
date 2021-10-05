@@ -1,4 +1,4 @@
-module Runtime
+module TreeWalker
   ( Eval,
     Value (..),
     defineAll,
