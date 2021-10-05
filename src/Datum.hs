@@ -14,7 +14,15 @@ where
 
 import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Control.Monad
-import Data.Char (GeneralCategory (Space), chr, generalCategory, isAlpha, isDigit, isSpace)
+import Data.Char
+  ( GeneralCategory (..),
+    chr,
+    generalCategory,
+    isAlpha,
+    isDigit,
+    isSpace,
+    ord,
+  )
 import Data.Functor (($>))
 import My.Control.Monad.Trans.ParserT
 import Number
@@ -136,6 +144,37 @@ characterName =
     <|> string "tab" $> '\t'
     <|> string "vtab" $> '\v'
 
+inlineHexEscape :: Parser Char
+inlineHexEscape = do
+  code <- string "\\x" *> many (digit 16) <* string ";"
+  case readHex code of
+    [(c, [])] -> return $ chr c
+    _ -> empty
+
+isConstituent :: Char -> Bool
+isConstituent c | isAlpha c = True
+isConstituent c | ord c > 127 = isConstituentCategory $ generalCategory c
+isConstituent _ = False
+
+isConstituentCategory :: GeneralCategory -> Bool
+isConstituentCategory UppercaseLetter = True
+isConstituentCategory LowercaseLetter = True
+isConstituentCategory TitlecaseLetter = True
+isConstituentCategory ModifierLetter = True
+isConstituentCategory OtherLetter = True
+isConstituentCategory NonSpacingMark = True
+isConstituentCategory LetterNumber = True
+isConstituentCategory OtherNumber = True
+isConstituentCategory DashPunctuation = True
+isConstituentCategory ConnectorPunctuation = True
+isConstituentCategory OtherPunctuation = True
+isConstituentCategory CurrencySymbol = True
+isConstituentCategory MathSymbol = True
+isConstituentCategory ModifierSymbol = True
+isConstituentCategory OtherSymbol = True
+isConstituentCategory PrivateUse = True
+isConstituentCategory _ = False
+
 dSym :: Parser String
 dSym =
   (:) <$> initial <*> many subsequent
@@ -144,14 +183,15 @@ dSym =
     <|> symbol "-"
     <|> symbol "..."
   where
-    initial = match isAlpha <|> oneOf "!$%&*/:<=>?~_^"
+    initial = constituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHexEscape
     subsequent = initial <|> digit 10 <|> oneOf ".+-@"
+    constituent = match isConstituent
 
 dString :: Parser String
 dString = like '"' *> many strElem <* like '"'
   where
     strElem =
-      (noneOf "\"\\" <|> escapeSequence <|> unicodeLiteral)
+      (noneOf "\"\\" <|> escapeSequence <|> inlineHexEscape)
         <* optional escapeNewline
 
 escapeSequence :: Parser Char
@@ -165,13 +205,6 @@ escapeSequence =
     <|> string "\\v" $> '\v'
     <|> string "\\\"" $> '"'
     <|> string "\\\\" $> '\\'
-
-unicodeLiteral :: Parser Char
-unicodeLiteral = do
-  code <- string "\\x" *> many (digit 16) <* string ";"
-  case readHex code of
-    [(c, [])] -> return $ chr c
-    _ -> empty
 
 escapeNewline :: Parser String
 escapeNewline =
