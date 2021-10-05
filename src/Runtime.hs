@@ -1,5 +1,13 @@
-module Eval
-  ( module Eval,
+module Runtime
+  ( Eval,
+    Value (..),
+    defineAll,
+    emptyEnv,
+    evalForm,
+    evalProgram,
+    fetch,
+    fetchAll,
+    runEval,
   )
 where
 
@@ -148,18 +156,6 @@ fetchAll (a : as) = do
 store :: Value -> Int -> Eval ()
 store v a = modify (Heap.store a v)
 
--- | Clone a value in the heap and return the address of the clone.
-clone :: Int -> Eval Int
-clone a = fetch a >>= alloc
-
--- | Clone a list of values in the heap and return the addresses of the clones.
-cloneAll :: [Int] -> Eval [Int]
-cloneAll [] = return []
-cloneAll (a : as) = do
-  a' <- clone a
-  as' <- cloneAll as
-  return (a' : as')
-
 -- | Get the address of a variable in the environment.
 ref :: Var -> Eval Int
 ref s = do
@@ -175,11 +171,6 @@ deref n = ref n >>= fetch
 -- | Set the value of a variable in the environment.
 set :: Var -> Value -> Eval ()
 set n v = ref n >>= store v
-
--- | Set the values of variables in the environment.
-setAll :: [(Var, Value)] -> Eval ()
-setAll [] = return ()
-setAll ((n, v) : xs) = set n v >> setAll xs
 
 -- | Evaluates a program.
 evalProgram :: Program -> Eval a -> Eval a
