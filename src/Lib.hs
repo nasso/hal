@@ -13,12 +13,22 @@ import Control.Monad
 import Data.Fixed
 import Data.Ratio (denominator, numerator)
 import Datum (datum)
-import Eval
 import My.Control.Monad.Trans.ExceptT
 import My.Control.Monad.Trans.IO
 import My.Control.Monad.Trans.ParserT
+import My.Control.Monad.Trans.StateT
 import Number
 import Program (Parser, Var, form, program)
+import Runtime
+  ( Eval,
+    Value (..),
+    defineAll,
+    emptyEnv,
+    evalForm,
+    evalProgram,
+    fetch,
+    fetchAll,
+  )
 
 parseAst :: Program.Parser a -> String -> Maybe a
 parseAst p s = do
@@ -50,17 +60,17 @@ withStdLib = withBuiltins . withFile "lang/std.scm"
 withBuiltins :: Eval a -> Eval a
 withBuiltins = defineAll builtins
 
-procedure :: ([Value] -> Eval Value) -> Value
-procedure f = Closure emptyEnv (fetchAll >=> f)
+pureFunc :: ([Value] -> Eval Value) -> Value
+pureFunc f = Closure emptyEnv (fetchAll >=> f)
 
 builtins :: [(Var, Value)]
 builtins = builtinList ++ builtinPredicates ++ builtinArithmetics
 
 builtinList :: [(Var, Value)]
 builtinList =
-  [ ("cons", procedure builtinPair),
-    ("car", procedure builtinCar),
-    ("cdr", procedure builtinCdr)
+  [ ("cons", pureFunc builtinPair),
+    ("car", pureFunc builtinCar),
+    ("cdr", pureFunc builtinCdr)
   ]
 
 builtinPair :: [Value] -> Eval Value
@@ -78,13 +88,13 @@ builtinCdr _ = throwError "cdr: invalid arguments"
 builtinPredicates :: [(Var, Value)]
 builtinPredicates =
   [ ("eq?", Closure emptyEnv (fmap Bool . builtinEq)),
-    ("boolean?", procedure (fmap Bool . builtinIsBool)),
-    ("number?", procedure (fmap Bool . builtinIsNumber)),
-    ("symbol?", procedure (fmap Bool . builtinIsSymbol)),
-    ("char?", procedure (fmap Bool . builtinIsChar)),
-    ("string?", procedure (fmap Bool . builtinIsString)),
-    ("pair?", procedure (fmap Bool . builtinIsPair)),
-    ("null?", procedure (fmap Bool . builtinIsNull))
+    ("boolean?", pureFunc (fmap Bool . builtinIsBool)),
+    ("number?", pureFunc (fmap Bool . builtinIsNumber)),
+    ("symbol?", pureFunc (fmap Bool . builtinIsSymbol)),
+    ("char?", pureFunc (fmap Bool . builtinIsChar)),
+    ("string?", pureFunc (fmap Bool . builtinIsString)),
+    ("pair?", pureFunc (fmap Bool . builtinIsPair)),
+    ("null?", pureFunc (fmap Bool . builtinIsNull))
   ]
 
 builtinIsBool :: [Value] -> Eval Bool
@@ -137,22 +147,22 @@ builtinEq _ = throwError "eq?: invalid arguments"
 
 builtinArithmetics :: [(Var, Value)]
 builtinArithmetics =
-  [ ("+", procedure (fmap Number . builtinSum)),
-    ("-", procedure (fmap Number . builtinDiff)),
-    ("*", procedure (fmap Number . builtinProd)),
-    ("/", procedure (fmap Number . builtinDiv)),
-    ("div", procedure (fmap Number . buildinDiv)),
-    ("mod", procedure (fmap Number . buildinMod))
+  [ ("+", pureFunc (fmap Number . builtinSum)),
+    ("-", pureFunc (fmap Number . builtinDiff)),
+    ("*", pureFunc (fmap Number . builtinProd)),
+    ("/", pureFunc (fmap Number . builtinDiv)),
+    ("div", pureFunc (fmap Number . buildinDiv)),
+    ("mod", pureFunc (fmap Number . buildinMod))
   ]
     ++ builtinNumComparisons
 
 builtinNumComparisons :: [(Var, Value)]
 builtinNumComparisons =
-  [ ("=", procedure (fmap Bool . builtinOrd (==))),
-    ("<", procedure (fmap Bool . builtinOrd (<))),
-    (">", procedure (fmap Bool . builtinOrd (>))),
-    ("<=", procedure (fmap Bool . builtinOrd (<=))),
-    (">=", procedure (fmap Bool . builtinOrd (>=)))
+  [ ("=", pureFunc (fmap Bool . builtinOrd (==))),
+    ("<", pureFunc (fmap Bool . builtinOrd (<))),
+    (">", pureFunc (fmap Bool . builtinOrd (>))),
+    ("<=", pureFunc (fmap Bool . builtinOrd (<=))),
+    (">=", pureFunc (fmap Bool . builtinOrd (>=)))
   ]
 
 builtinOrd :: (Number -> Number -> Bool) -> [Value] -> Eval Bool
