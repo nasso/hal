@@ -42,7 +42,8 @@ emptyEnv = Map.empty
 
 -- | Represents any value in the heap.
 data Value
-  = Bool Bool
+  = Void
+  | Bool Bool
   | Number Number
   | Char Char
   | String String
@@ -52,6 +53,7 @@ data Value
   | Closure Env ([Int] -> Eval Value)
 
 instance Show Value where
+  show Void = "#<void>"
   show (Pair (Symbol "quote") (Pair v Empty)) = "'" ++ show v
   show (Pair (Symbol "quasiquote") (Pair v Empty)) = "`" ++ show v
   show (Pair (Symbol "unquote") (Pair v Empty)) = "," ++ show v
@@ -191,7 +193,7 @@ evalDef b ev = do
   bindings <- mapM (prealloc . fst) pairs
   bindAll bindings (setAllExprs pairs >> ev)
   where
-    prealloc v = (,) v <$> alloc (Bool False)
+    prealloc v = (,) v <$> alloc Void
     unroll (VarDef n e) = return [(n, e)]
     unroll (Begin ds) = join <$> mapM unroll ds
     setAllExprs [] = return ()
@@ -207,9 +209,7 @@ evalExpr (If cond then' else') = do
   case b of
     Bool False -> evalExpr else'
     _ -> evalExpr then'
-evalExpr (Set var expr) = do
-  val <- evalExpr expr
-  set var val $> val
+evalExpr (Set var expr) = (evalExpr expr >>= set var) $> Void
 evalExpr (Lambda formals body) = do
   env <- ask -- capture the environment
   return $ -- create a closure
