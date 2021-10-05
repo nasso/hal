@@ -20,7 +20,7 @@ import My.Control.Monad.Trans.ParserT
 import My.Control.Monad.Trans.StateT
 import Number
 import Program (Parser, Var, form, program)
-import Runtime
+import TreeWalker
   ( Eval,
     Value (..),
     defineAll,
@@ -316,7 +316,7 @@ builtinUtils :: [(Var, Value)]
 builtinUtils =
   [ ("void", pureFunc builtinVoid),
     ("error", pureFunc builtinError),
-    ("dump-heap", pureFunc builtinDumpHeap)
+    ("dump-env", pureFunc builtinDumpHeap)
   ]
 
 -- | Builtin "void" procedure
