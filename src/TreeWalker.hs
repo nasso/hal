@@ -12,6 +12,9 @@ module TreeWalker
 where
 
 import Control.Monad
+import Control.Monad.MyTrans.ExceptT
+import Control.Monad.MyTrans.ReaderT
+import Control.Monad.MyTrans.StateT
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
@@ -20,9 +23,6 @@ import Datum (Datum)
 import qualified Datum
 import Heap (Heap)
 import qualified Heap
-import My.Control.Monad.Trans.ExceptT
-import My.Control.Monad.Trans.ReaderT
-import My.Control.Monad.Trans.StateT
 import Number
 import Program
   ( Definition (..),

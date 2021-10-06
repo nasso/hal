@@ -15,19 +15,20 @@ cabal-version:       >=1.10
 library
   hs-source-dirs:      .
   exposed-modules:
-    My.Control.Monad.Trans
-    My.Control.Monad.Trans.ExceptT
-    My.Control.Monad.Trans.IdentityT
-    My.Control.Monad.Trans.MaybeT
-    My.Control.Monad.Trans.ParserT
-    My.Control.Monad.Trans.ReaderT
-    My.Control.Monad.Trans.StateT
-    My.Control.Monad.Trans.IO
+    Control.Monad.MyTrans
+    Control.Monad.MyTrans.ExceptT
+    Control.Monad.MyTrans.IdentityT
+    Control.Monad.MyTrans.MaybeT
+    Control.Monad.MyTrans.ParserT
+    Control.Monad.MyTrans.ReaderT
+    Control.Monad.MyTrans.StateT
+    Control.Monad.MyTrans.IO
   other-modules:
-    My.Control.Monad.Trans.Except
-    My.Control.Monad.Trans.Parser
-    My.Control.Monad.Trans.Reader
-    My.Control.Monad.Trans.State
+    Control.Monad.MyTrans.Class
+    Control.Monad.MyTrans.Except
+    Control.Monad.MyTrans.Parser
+    Control.Monad.MyTrans.Reader
+    Control.Monad.MyTrans.State
   build-depends:       base >= 4.7 && < 5
   default-language:    Haskell2010
 

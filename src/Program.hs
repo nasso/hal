@@ -13,10 +13,10 @@ module Program
 where
 
 import Control.Applicative
+import Control.Monad.MyTrans.ParserT
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Datum (Constant (..), Datum (..))
-import My.Control.Monad.Trans.ParserT
 
 type Var = String
 

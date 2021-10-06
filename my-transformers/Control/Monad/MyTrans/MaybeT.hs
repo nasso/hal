@@ -1,12 +1,12 @@
-module My.Control.Monad.Trans.MaybeT
+module Control.Monad.MyTrans.MaybeT
   ( MaybeT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import My.Control.Monad.Trans (MonadTrans (..))
-import My.Control.Monad.Trans.IO (MonadIO (..))
+import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.IO (MonadIO (..))
 
 -- | The maybe monad transformer.
 newtype MaybeT m a = MaybeT {runMaybeT :: m (Maybe a)}

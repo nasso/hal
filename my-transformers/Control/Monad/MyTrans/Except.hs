@@ -1,6 +1,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 
-module My.Control.Monad.Trans.Except
+module Control.Monad.MyTrans.Except
   ( MonadExcept (..),
     liftEither,
   )
