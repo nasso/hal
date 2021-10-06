@@ -1,8 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-}
-
-module My.Control.Monad.Trans
+module Control.Monad.MyTrans.Class
   ( MonadTrans (..),
   )
 where

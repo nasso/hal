@@ -2,21 +2,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module My.Control.Monad.Trans.StateT
-  ( module My.Control.Monad.Trans.State,
+module Control.Monad.MyTrans.StateT
+  ( module Control.Monad.MyTrans.State,
     StateT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
+import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.Except
+import Control.Monad.MyTrans.IO
+import Control.Monad.MyTrans.Parser
+import Control.Monad.MyTrans.Reader
+import Control.Monad.MyTrans.State
 import Data.Bifunctor (Bifunctor (first))
-import My.Control.Monad.Trans (MonadTrans (..))
-import My.Control.Monad.Trans.Except
-import My.Control.Monad.Trans.IO
-import My.Control.Monad.Trans.Parser
-import My.Control.Monad.Trans.Reader
-import My.Control.Monad.Trans.State
 
 -- | StateT is a monad transformer that adds state to a monad.
 newtype StateT s m a = StateT {runStateT :: s -> m (a, s)}

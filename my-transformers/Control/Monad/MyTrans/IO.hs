@@ -1,4 +1,4 @@
-module My.Control.Monad.Trans.IO
+module Control.Monad.MyTrans.IO
   ( MonadIO (..),
   )
 where

@@ -10,14 +10,14 @@ where
 
 import Control.Applicative
 import Control.Monad
+import Control.Monad.MyTrans.ExceptT
+import Control.Monad.MyTrans.IO
+import Control.Monad.MyTrans.ParserT
+import Control.Monad.MyTrans.StateT
 import Data.Fixed
 import Data.Functor
 import Data.Ratio (denominator, numerator)
 import Datum (datum)
-import My.Control.Monad.Trans.ExceptT
-import My.Control.Monad.Trans.IO
-import My.Control.Monad.Trans.ParserT
-import My.Control.Monad.Trans.StateT
 import Number
 import Program (Parser, Var, form, program)
 import TreeWalker

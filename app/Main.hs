@@ -1,9 +1,8 @@
 module Main where
 
 import Control.Monad
+import Control.Monad.MyTrans
 import Lib
-import My.Control.Monad.Trans.ExceptT
-import My.Control.Monad.Trans.IO
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)

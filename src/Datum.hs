@@ -14,6 +14,7 @@ where
 
 import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Control.Monad
+import Control.Monad.MyTrans.ParserT
 import Data.Char
   ( GeneralCategory (..),
     chr,
@@ -26,7 +27,6 @@ import Data.Char
 import Data.Functor (($>))
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
-import My.Control.Monad.Trans.ParserT
 import Number
 import Numeric (readDec, readHex, readInt, readOct)
 

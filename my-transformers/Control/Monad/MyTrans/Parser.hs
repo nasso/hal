@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
-module My.Control.Monad.Trans.Parser
+module Control.Monad.MyTrans.Parser
   ( MonadParser (..),
     eof,
     match,

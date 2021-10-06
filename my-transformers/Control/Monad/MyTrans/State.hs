@@ -2,7 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module My.Control.Monad.Trans.State
+module Control.Monad.MyTrans.State
   ( MonadState (..),
     gets,
     modify,
