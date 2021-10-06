@@ -24,6 +24,8 @@ import Data.Char
     ord,
   )
 import Data.Functor (($>))
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
 import My.Control.Monad.Trans.ParserT
 import Number
 import Numeric (readDec, readHex, readInt, readOct)
@@ -90,28 +92,26 @@ instance Show Constant where
 -- | Represents a compound Scheme data value.
 data Datum
   = Lexeme Constant
-  | Pair Datum Datum
-  | Empty
+  | List [Datum]
+  | ImproperList (NonEmpty Datum) Constant
   deriving (Eq)
 
 instance Show Datum where
   show (Lexeme c) = show c
-  show (Pair (Lexeme (Sym "quote")) (Pair v Empty)) = "'" ++ show v
-  show (Pair (Lexeme (Sym "quasiquote")) (Pair v Empty)) = "`" ++ show v
-  show (Pair (Lexeme (Sym "unquote")) (Pair v Empty)) = "," ++ show v
-  show (Pair (Lexeme (Sym "unquote-splicing")) (Pair v Empty)) = ",@" ++ show v
-  show (Pair (Lexeme (Sym "syntax")) (Pair v Empty)) = "#'" ++ show v
-  show (Pair (Lexeme (Sym "quasisyntax")) (Pair v Empty)) = "#`" ++ show v
-  show (Pair (Lexeme (Sym "unsyntax")) (Pair v Empty)) = "#," ++ show v
-  show (Pair (Lexeme (Sym "unsyntax-splicing")) (Pair v Empty)) =
-    "#,@" ++ show v
-  show (Pair car cdr) = "(" ++ show car ++ expand cdr ++ ")"
-    where
-      expand :: Datum -> String
-      expand Empty = ""
-      expand (Pair car' cdr') = " " ++ show car' ++ expand cdr'
-      expand d = " . " ++ show d
-  show Empty = "()"
+  show (List [Lexeme (Sym "quote"), v]) = "'" ++ show v
+  show (List [Lexeme (Sym "quasiquote"), v]) = "`" ++ show v
+  show (List [Lexeme (Sym "unquote"), v]) = "," ++ show v
+  show (List [Lexeme (Sym "unquote-splicing"), v]) = ",@" ++ show v
+  show (List [Lexeme (Sym "syntax"), v]) = "#'" ++ show v
+  show (List [Lexeme (Sym "quasisyntax"), v]) = "#`" ++ show v
+  show (List [Lexeme (Sym "unsyntax"), v]) = "#," ++ show v
+  show (List [Lexeme (Sym "unsyntax-splicing"), v]) = "#,@" ++ show v
+  show (List elems) = "(" ++ unwords (map show elems) ++ ")"
+  show (ImproperList elems tail') =
+    "(" ++ unwords (map show $ NonEmpty.toList elems)
+      ++ " . "
+      ++ show tail'
+      ++ ")"
 
 datum :: Parser Datum
 datum =
@@ -341,20 +341,22 @@ digit _ = empty
 -- | Parser for Scheme lists (both proper and improper).
 dList :: Parser Datum
 dList =
-  makeProper <$> paren (many datum)
-    <|> paren
-      ( do
-          i <- some datum
-          t <- symbol "." *> datum
-          return $ makeImproper i t
-      )
+  paren
+    ( do
+        ds <- many datum
+        case ds of
+          [] -> return $ List []
+          (d : ds') ->
+            makeImproper (d :| ds') <$> (like '.' >> datum)
+              <|> return (List ds)
+    )
     <|> abbreviation
 
 abbreviation :: Parser Datum
 abbreviation = do
   s <- Lexeme . Sym <$> abbrevPrefix
   d <- datum
-  return $ makeProper [s, d]
+  return $ List [s, d]
 
 abbrevPrefix :: Parser String
 abbrevPrefix =
@@ -367,10 +369,7 @@ abbrevPrefix =
     <|> string "#," $> "unsyntax"
     <|> string "#,@" $> "unsyntax-splicing"
 
-makeProper :: [Datum] -> Datum
-makeProper = foldr Pair Empty
-
-makeImproper :: [Datum] -> Datum -> Datum
-makeImproper [] _ = error "improper list cannot have less than 2 elements"
-makeImproper [x] t = Pair x t
-makeImproper (x : xs) t = Pair x (makeImproper xs t)
+makeImproper :: NonEmpty Datum -> Datum -> Datum
+makeImproper ds (Lexeme c) = ImproperList ds c
+makeImproper ds (List ds') = List (NonEmpty.toList ds <> ds')
+makeImproper ds (ImproperList ds' d) = makeImproper (ds <> ds') (Lexeme d)
