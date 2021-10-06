@@ -13,7 +13,7 @@ module Program
 where
 
 import Control.Applicative
-import Data.List.NonEmpty (NonEmpty (..), (<|))
+import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Datum (Constant (..), Datum (..))
 import My.Control.Monad.Trans.ParserT
@@ -61,38 +61,19 @@ var = do
 sym :: String -> Parser Datum
 sym = like . Lexeme . Sym
 
--- | Parse a proper list.
-proper :: Parser [Datum]
-proper = do
-  v <- item
-  case v of
-    Pair car cdr -> (car :) . fst <$> exec [cdr] proper
-    Empty -> return []
-    _ -> empty
-
--- | Parse an improper list.
-improper :: Parser (NonEmpty Datum, Datum)
-improper = do
-  Pair car cdr <- item
-  case cdr of
-    cdr'@(Pair _ _) -> do
-      (car', l) <- fst <$> exec [cdr'] improper
-      return (car <| car', l)
-    cdr' -> return (car :| [], cdr')
-
 -- | Parse a proper list, and run a parser on its elements.
 properP :: Parser a -> Parser a
 properP p = do
-  l <- proper
+  List l <- item
   fst <$> exec l (p <* eof)
 
 -- | Parse an improper list, run one parser on its elements and another on its
 -- tail.
 improperP :: Parser a -> Parser b -> Parser (a, b)
 improperP pa pb = do
-  (l, l') <- improper
+  ImproperList l l' <- item
   a <- fst <$> exec (NonEmpty.toList l) (pa <* eof)
-  b <- fst <$> exec [l'] (pb <* eof)
+  b <- fst <$> exec [Lexeme l'] (pb <* eof)
   return (a, b)
 
 program :: Parser Program

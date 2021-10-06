@@ -93,9 +93,9 @@ valueFromDatum (Datum.Lexeme (Datum.Number n)) = Number n
 valueFromDatum (Datum.Lexeme (Datum.Char c)) = Char c
 valueFromDatum (Datum.Lexeme (Datum.String s)) = String s
 valueFromDatum (Datum.Lexeme (Datum.Sym s)) = Symbol s
-valueFromDatum (Datum.Pair car cdr) =
-  Pair (valueFromDatum car) (valueFromDatum cdr)
-valueFromDatum Datum.Empty = Empty
+valueFromDatum (Datum.List ds) = foldr Pair Empty $ valueFromDatum <$> ds
+valueFromDatum (Datum.ImproperList ds tl) =
+  foldr Pair (valueFromDatum (Datum.Lexeme tl)) $ valueFromDatum <$> ds
 
 type Eval a = StateT (Heap Value) (ReaderT Env (ExceptT String IO)) a
 
