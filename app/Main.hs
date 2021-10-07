@@ -55,9 +55,7 @@ vm files i = withStdLib $ withFiles files $ when i repl
 repl :: Eval ()
 repl = do
   line <- liftIO $ prompt >> getLine
-  if line == ":quit"
-    then return ()
-    else evalAndPrint line
+  evalAndPrint line
 
 evalAndPrint :: String -> Eval ()
 evalAndPrint s = withFormStr s displayAndLoop `catchError` displayError

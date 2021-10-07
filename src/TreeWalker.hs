@@ -1,13 +1,23 @@
 module TreeWalker
   ( Eval,
     Value (..),
+    Continuation,
+    alloc,
+    allocAll,
+    bind,
+    bindAll,
+    define,
     defineAll,
     emptyEnv,
     evalForm,
     evalProgram,
     fetch,
     fetchAll,
+    store,
     runEval,
+    ref,
+    deref,
+    set,
   )
 where
 
