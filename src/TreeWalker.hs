@@ -123,7 +123,7 @@ type Eval a = StateT (Heap Value) (ReaderT Env (ExceptT String IO)) a
 
 runEval :: Eval a -> IO (Either String a)
 runEval e = do
-  v <- runErrorT $ runReaderT (runStateT e Heap.empty) emptyEnv
+  v <- runExceptT $ runReaderT (runStateT e Heap.empty) emptyEnv
   return $ fst <$> v
 
 -- | Allocate a new value in the heap and return its address.
