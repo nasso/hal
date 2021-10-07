@@ -150,7 +150,6 @@
         ))
     )
 
-
     (suite "variadics"
         (test "andproc" andproc)
         (test "andproc-t" (lambda () (andproc #t)))

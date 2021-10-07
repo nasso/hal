@@ -24,7 +24,6 @@ import TreeWalker
   ( Eval,
     Value (..),
     defineAll,
-    emptyEnv,
     evalForm,
     evalProgram,
     fetch,
@@ -37,32 +36,41 @@ parseAst p s = do
   (ast, []) <- runParserT p ds
   return ast
 
-withFormStr :: String -> (Maybe Value -> Eval a) -> Eval a
+withFormStr :: String -> ([Value] -> Eval ()) -> Eval ()
 withFormStr s e = case parseAst Program.form s of
   Nothing -> throwError "Syntax error"
   Just f -> evalForm f e
 
-withProgramStr :: String -> Eval a -> Eval a
+withProgramStr :: String -> Eval () -> Eval ()
 withProgramStr s e = case parseAst Program.program s of
   Nothing -> throwError "Syntax error"
   Just p -> evalProgram p e
 
-withFile :: FilePath -> Eval a -> Eval a
+withFile :: FilePath -> Eval () -> Eval ()
 withFile f e = do
   src <- liftIO $ readFile f
   withProgramStr src e
 
-withFiles :: [FilePath] -> Eval a -> Eval a
+withFiles :: [FilePath] -> Eval () -> Eval ()
 withFiles = foldr ((.) . withFile) id
 
-withStdLib :: Eval a -> Eval a
+withStdLib :: Eval () -> Eval ()
 withStdLib = withBuiltins . withFile "lang/std.scm"
 
-withBuiltins :: Eval a -> Eval a
+withBuiltins :: Eval () -> Eval ()
 withBuiltins = defineAll builtins
 
-pureFunc :: ([Value] -> Eval Value) -> Value
-pureFunc f = Closure emptyEnv (fetchAll >=> f)
+cbrProc :: ([Int] -> Eval [Value]) -> Value
+cbrProc f = Procedure $ \args cont -> f args >>= cont
+
+cbvProc :: ([Value] -> Eval [Value]) -> Value
+cbvProc f = cbrProc $ fetchAll >=> f
+
+cbrProc1 :: ([Int] -> Eval Value) -> Value
+cbrProc1 f = cbrProc $ fmap (: []) . f
+
+cbvProc1 :: ([Value] -> Eval Value) -> Value
+cbvProc1 f = cbvProc $ fmap (: []) . f
 
 builtins :: [(Var, Value)]
 builtins =
@@ -72,9 +80,9 @@ builtins =
 
 builtinList :: [(Var, Value)]
 builtinList =
-  [ ("cons", pureFunc builtinPair),
-    ("car", pureFunc builtinCar),
-    ("cdr", pureFunc builtinCdr)
+  [ ("cons", cbvProc1 builtinPair),
+    ("car", cbvProc1 builtinCar),
+    ("cdr", cbvProc1 builtinCdr)
   ]
 
 builtinPair :: [Value] -> Eval Value
@@ -91,14 +99,14 @@ builtinCdr _ = throwError "cdr: invalid arguments"
 
 builtinPredicates :: [(Var, Value)]
 builtinPredicates =
-  [ ("eq?", Closure emptyEnv (fmap Bool . builtinEq)),
-    ("boolean?", pureFunc (fmap Bool . builtinIsBool)),
-    ("number?", pureFunc (fmap Bool . builtinIsNumber)),
-    ("symbol?", pureFunc (fmap Bool . builtinIsSymbol)),
-    ("char?", pureFunc (fmap Bool . builtinIsChar)),
-    ("string?", pureFunc (fmap Bool . builtinIsString)),
-    ("pair?", pureFunc (fmap Bool . builtinIsPair)),
-    ("null?", pureFunc (fmap Bool . builtinIsNull))
+  [ ("eq?", cbrProc1 (fmap Bool . builtinEq)),
+    ("boolean?", cbvProc1 (fmap Bool . builtinIsBool)),
+    ("number?", cbvProc1 (fmap Bool . builtinIsNumber)),
+    ("symbol?", cbvProc1 (fmap Bool . builtinIsSymbol)),
+    ("char?", cbvProc1 (fmap Bool . builtinIsChar)),
+    ("string?", cbvProc1 (fmap Bool . builtinIsString)),
+    ("pair?", cbvProc1 (fmap Bool . builtinIsPair)),
+    ("null?", cbvProc1 (fmap Bool . builtinIsNull))
   ]
 
 builtinIsBool :: [Value] -> Eval Bool
@@ -152,22 +160,22 @@ builtinEq _ = throwError "eq?: invalid arguments"
 
 builtinArithmetics :: [(Var, Value)]
 builtinArithmetics =
-  [ ("+", pureFunc (fmap Number . builtinSum)),
-    ("-", pureFunc (fmap Number . builtinDiff)),
-    ("*", pureFunc (fmap Number . builtinProd)),
-    ("/", pureFunc (fmap Number . builtinDiv)),
-    ("div", pureFunc (fmap Number . buildinDiv)),
-    ("mod", pureFunc (fmap Number . buildinMod))
+  [ ("+", cbvProc1 (fmap Number . builtinSum)),
+    ("-", cbvProc1 (fmap Number . builtinDiff)),
+    ("*", cbvProc1 (fmap Number . builtinProd)),
+    ("/", cbvProc1 (fmap Number . builtinDiv)),
+    ("div", cbvProc1 (fmap Number . buildinDiv)),
+    ("mod", cbvProc1 (fmap Number . buildinMod))
   ]
     ++ builtinNumComparisons
 
 builtinNumComparisons :: [(Var, Value)]
 builtinNumComparisons =
-  [ ("=", pureFunc (fmap Bool . builtinOrd (==))),
-    ("<", pureFunc (fmap Bool . builtinOrd (<))),
-    (">", pureFunc (fmap Bool . builtinOrd (>))),
-    ("<=", pureFunc (fmap Bool . builtinOrd (<=))),
-    (">=", pureFunc (fmap Bool . builtinOrd (>=)))
+  [ ("=", cbvProc1 (fmap Bool . builtinOrd (==))),
+    ("<", cbvProc1 (fmap Bool . builtinOrd (<))),
+    (">", cbvProc1 (fmap Bool . builtinOrd (>))),
+    ("<=", cbvProc1 (fmap Bool . builtinOrd (<=))),
+    (">=", cbvProc1 (fmap Bool . builtinOrd (>=)))
   ]
 
 builtinOrd :: (Number -> Number -> Bool) -> [Value] -> Eval Bool
@@ -267,8 +275,8 @@ calcDivMod' n d =
 -- | Builtin I/O procedures
 builtinIO :: [(Var, Value)]
 builtinIO =
-  [ ("display", pureFunc builtinDisplay),
-    ("newline", pureFunc builtinNewline)
+  [ ("display", cbvProc1 builtinDisplay),
+    ("newline", cbvProc1 builtinNewline)
   ]
 
 -- | Builtin display procedure
@@ -314,9 +322,9 @@ builtinNewline _ = throwError "newline: invalid arguments"
 -- | Utility procedures
 builtinUtils :: [(Var, Value)]
 builtinUtils =
-  [ ("void", pureFunc builtinVoid),
-    ("error", pureFunc builtinError),
-    ("dump-env", pureFunc builtinDumpHeap)
+  [ ("void", cbvProc1 builtinVoid),
+    ("error", cbvProc1 builtinError),
+    ("dump-env", cbvProc1 builtinDumpHeap)
   ]
 
 -- | Builtin "void" procedure

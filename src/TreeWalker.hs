@@ -40,6 +40,19 @@ type Env = Map Var Int
 emptyEnv :: Env
 emptyEnv = Map.empty
 
+type Continuation = [Value] -> Eval [Value]
+
+fromCont1 :: (Value -> Eval [Value]) -> Continuation
+fromCont1 f [v] = f v
+fromCont1 _ l =
+  throwError $
+    "returned "
+      ++ show (length l)
+      ++ " values to a single value return context"
+
+toCont1 :: Continuation -> Value -> Eval [Value]
+toCont1 cont v = cont [v]
+
 -- | Represents any value in the heap.
 data Value
   = Void
@@ -50,7 +63,7 @@ data Value
   | Symbol String
   | Pair Value Value
   | Empty
-  | Closure Env ([Int] -> Eval Value)
+  | Procedure ([Int] -> Continuation -> Eval [Value])
 
 instance Show Value where
   show Void = "#<void>"
@@ -85,7 +98,7 @@ instance Show Value where
       expand (Pair car' cdr') = " " ++ show car' ++ expand cdr'
       expand d = " . " ++ show d
   show Empty = "()"
-  show (Closure _ _) = "#<procedure>"
+  show (Procedure _) = "#<procedure>"
 
 valueFromDatum :: Datum -> Value
 valueFromDatum (Datum.Lexeme (Datum.Bool b)) = Bool b
@@ -103,10 +116,6 @@ runEval :: Eval a -> IO (Either String a)
 runEval e = do
   v <- runErrorT $ runReaderT (runStateT e Heap.empty) emptyEnv
   return $ fst <$> v
-
--- | Chain evaluations and return the output of the last evaluation.
-foldToLast :: NonEmpty (Eval a) -> Eval a
-foldToLast = foldr1 (>>)
 
 -- | Allocate a new value in the heap and return its address.
 alloc :: Value -> Eval Int
@@ -175,53 +184,62 @@ set :: Var -> Value -> Eval ()
 set n v = ref n >>= store v
 
 -- | Evaluates a program.
-evalProgram :: Program -> Eval a -> Eval a
+evalProgram :: Program -> Eval () -> Eval ()
 evalProgram (Program []) e = e
-evalProgram (Program [f]) e = evalForm f (const e)
 evalProgram (Program (f : fs)) e =
   evalForm f $ const $ evalProgram (Program fs) e
 
 -- | Evaluate a form and run @e@ in the potentially modified environment.
-evalForm :: Form -> (Maybe Value -> Eval a) -> Eval a
-evalForm (Expr expr) e = evalExpr expr >>= e . Just
-evalForm (Def def) e = evalDef def $ e Nothing
+evalForm :: Form -> ([Value] -> Eval ()) -> Eval ()
+evalForm (Expr expr) e = void $ evalExpr expr $ \v -> e v $> []
+evalForm (Def def) e = evalDef def $ e []
 
 -- | Evaluates a definition.
-evalDef :: Definition -> Eval a -> Eval a
+evalDef :: Definition -> Eval () -> Eval ()
 evalDef b ev = do
   pairs <- unroll b
   bindings <- mapM (prealloc . fst) pairs
-  bindAll bindings (setAllExprs pairs >> ev)
+  bindAll bindings $ setps pairs
   where
     prealloc v = (,) v <$> alloc Void
     unroll (VarDef n e) = return [(n, e)]
     unroll (Begin ds) = join <$> mapM unroll ds
-    setAllExprs [] = return ()
-    setAllExprs ((n, e) : xs) = evalExpr e >>= set n >> setAllExprs xs
+    setps [] = ev
+    setps ((n, e) : xs) =
+      (evalExpr e =<< close (fromCont1 $ \v -> set n v >> setps xs $> [])) $> ()
 
 -- | Evaluates an expression.
-evalExpr :: Expression -> Eval Value
-evalExpr (Lit (Datum.Sym s)) = deref s
-evalExpr (Lit c) = return $ valueFromDatum $ Datum.Lexeme c
-evalExpr (Quote d) = return $ valueFromDatum d
-evalExpr (If cond then' else') = do
-  b <- evalExpr cond
-  case b of
-    Bool False -> evalExpr else'
-    _ -> evalExpr then'
-evalExpr (Set var expr) = (evalExpr expr >>= set var) $> Void
-evalExpr (Lambda formals body) = do
+evalExpr :: Expression -> Continuation -> Eval [Value]
+evalExpr (Lit (Datum.Sym s)) cont = deref s >>= toCont1 cont
+evalExpr (Lit c) cont = toCont1 cont $ valueFromDatum $ Datum.Lexeme c
+evalExpr (Quote d) cont = toCont1 cont $ valueFromDatum d
+evalExpr (Lambda formals body) cont = do
   env <- ask -- capture the environment
-  return $ -- create a closure
-    Closure env $ \args ->
-      bindFormals formals args $ evalBody body -- bind args and eval the body
-evalExpr (Application funExpr argExprs) = do
-  val <- evalExpr funExpr
-  -- clone all arguments (call-by-value)
-  args <- mapM evalExpr argExprs >>= allocAll
-  case val of
-    Closure env fn -> local (const env) $ fn args
-    _ -> throwError "not a procedure"
+  cont
+    [ Procedure $ -- create a procedure
+        \args cont' ->
+          local (const env) $ -- restore the captured environment
+            bindFormals formals args $ -- bind arg values to formal params
+              evalBody body cont' -- evaluate the body
+    ]
+evalExpr (Set var expr) cont = do
+  cont' <- close cont -- lock the continuation to the current environment
+  let assign val = set var val >> cont' []
+   in evalExpr expr =<< close (fromCont1 assign)
+evalExpr (If cond then' else') cont = do
+  cont' <- close cont
+  let branch (Bool False) = evalExpr else' cont'
+      branch _ = evalExpr then' cont'
+   in evalExpr cond =<< close (fromCont1 branch)
+evalExpr (Application funExpr argExprs) cont = do
+  cont' <- close cont
+  let applyProc (Procedure proc') = evalArgs argExprs =<< close (run proc')
+      applyProc _ = throwError "not a procedure"
+      evalArgs [] c = c []
+      evalArgs (e : es) c =
+        evalExpr e =<< close (\v -> evalArgs es =<< close (c . (++) v))
+      run proc' vs = allocAll vs >>= flip proc' cont'
+   in evalExpr funExpr =<< close (fromCont1 applyProc)
 
 -- | Bind the formals of a lambda expression some addresses.
 bindFormals :: Formals -> [Int] -> Eval a -> Eval a
@@ -238,7 +256,13 @@ bindFormals (Variadic (p : ps) ps') (a : as) e = do
   define p av $ bindFormals (Variadic ps ps') as e
 bindFormals (Variadic _ _) [] _ = throwError "not enough arguments"
 
--- | Evaluates a body, that is, a sequence of expresion, and returns the value
+-- | Evaluates a body, that is, a sequence of expressions, and returns the value
 -- of the last expression.
-evalBody :: NonEmpty Expression -> Eval Value
-evalBody = foldToLast . fmap evalExpr
+evalBody :: NonEmpty Expression -> Continuation -> Eval [Value]
+evalBody (e :| []) c = evalExpr e c
+evalBody (e :| e' : es) c = evalExpr e $ const $ evalBody (e' :| es) c
+
+close :: Continuation -> Eval Continuation
+close c = do
+  env <- ask
+  return $ local (const env) . c
