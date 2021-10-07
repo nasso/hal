@@ -35,8 +35,7 @@ import Heap (Heap)
 import qualified Heap
 import Number
 import Program
-  ( Definition (..),
-    Expression (..),
+  ( Expression (..),
     Form (..),
     Formals (..),
     Program (..),
@@ -205,18 +204,15 @@ evalForm (Expr expr) e = void $ evalExpr expr $ \v -> e v $> []
 evalForm (Def def) e = evalDef def $ e []
 
 -- | Evaluates a definition.
-evalDef :: Definition -> Eval () -> Eval ()
-evalDef b ev =
-  let prealloc v = (,) v <$> alloc Void
-      unroll (VarDef n e) = return [(n, e)]
-      unroll (Begin ds) = join <$> mapM unroll ds
-      setps [] = ev
-      setps ((n, e) : xs) =
-        evalExpr e (fromCont1 $ \v -> set n v >> setps xs $> []) $> ()
-   in do
-        pairs <- unroll b
-        bindings <- mapM (prealloc . fst) pairs
-        bindAll bindings $ setps pairs
+evalDef :: [(Var, Expression)] -> Eval () -> Eval ()
+evalDef defs ev = do
+  bindings <- mapM (prealloc . fst) defs
+  bindAll bindings $ setps defs
+  where
+    prealloc v = (,) v <$> alloc Void
+    setps [] = ev
+    setps ((n, e) : xs) =
+      evalExpr e (fromCont1 $ \v -> set n v >> setps xs $> []) $> ()
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Continuation -> Eval [Value]

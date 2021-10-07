@@ -1,7 +1,6 @@
 module Program
   ( Program (..),
     Form (..),
-    Definition (..),
     Expression (..),
     Constant (..),
     Formals (..),
@@ -13,6 +12,7 @@ module Program
 where
 
 import Control.Applicative
+import Control.Monad
 import Control.Monad.MyTrans.ParserT
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
@@ -22,15 +22,7 @@ type Var = String
 
 newtype Program = Program [Form] deriving (Eq, Show)
 
-data Form
-  = Def Definition
-  | Expr Expression
-  deriving (Eq, Show)
-
-data Definition
-  = VarDef Var Expression
-  | Begin [Definition]
-  deriving (Eq, Show)
+data Form = Def [(Var, Expression)] | Expr Expression deriving (Eq, Show)
 
 data Expression
   = Lit Constant
@@ -82,11 +74,12 @@ program = Program <$> many form
 form :: Parser Form
 form = Def <$> definition <|> Expr <$> expression
 
-definition :: Parser Definition
+definition :: Parser [(Var, Expression)]
 definition =
-  properP $
-    VarDef <$> (sym "define" *> var) <*> expression
-      <|> Begin <$> (sym "begin" *> many definition)
+  properP
+    ( (: []) <$> ((,) <$> (sym "define" *> var) <*> expression)
+        <|> join <$> (sym "begin" >> many definition)
+    )
 
 expression :: Parser Expression
 expression =
