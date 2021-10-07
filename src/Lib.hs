@@ -319,6 +319,8 @@ builtinUtils :: [(Var, Value)]
 builtinUtils =
   [ ("call-with-current-continuation", cbvProcCont builtinCallCc),
     ("call/cc", cbvProcCont builtinCallCc),
+    ("values", cbvProc pure),
+    ("call-with-values", cbvProcCont builtinCallWithValues),
     ("exit", cbvProcCont builtinExit),
     ("void", cbvProc1 builtinVoid),
     ("error", cbvProc1 builtinError),
@@ -333,6 +335,14 @@ builtinCallCc [Procedure p] cnt = do
   where
     escape vs _ = fetchAll vs >>= cnt
 builtinCallCc _ _ = throwError "call/cc: invalid arguments"
+
+-- | Builtin call-with-values procedure.
+builtinCallWithValues :: [Value] -> Continuation -> Eval [Value]
+builtinCallWithValues [Procedure p, Procedure c] cont = do
+  p [] $ \vs -> do
+    as <- allocAll vs
+    c as cont
+builtinCallWithValues _ _ = throwError "call-with-values: invalid arguments"
 
 -- | Builtin exit procedure.
 builtinExit :: [Value] -> Continuation -> Eval [Value]
