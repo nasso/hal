@@ -206,50 +206,45 @@ evalForm (Def def) e = evalDef def $ e []
 
 -- | Evaluates a definition.
 evalDef :: Definition -> Eval () -> Eval ()
-evalDef b ev = do
-  pairs <- unroll b
-  bindings <- mapM (prealloc . fst) pairs
-  bindAll bindings $ setps pairs
-  where
-    prealloc v = (,) v <$> alloc Void
-    unroll (VarDef n e) = return [(n, e)]
-    unroll (Begin ds) = join <$> mapM unroll ds
-    setps [] = ev
-    setps ((n, e) : xs) =
-      (evalExpr e =<< close (fromCont1 $ \v -> set n v >> setps xs $> [])) $> ()
+evalDef b ev =
+  let prealloc v = (,) v <$> alloc Void
+      unroll (VarDef n e) = return [(n, e)]
+      unroll (Begin ds) = join <$> mapM unroll ds
+      setps [] = ev
+      setps ((n, e) : xs) =
+        evalExpr e (fromCont1 $ \v -> set n v >> setps xs $> []) $> ()
+   in do
+        pairs <- unroll b
+        bindings <- mapM (prealloc . fst) pairs
+        bindAll bindings $ setps pairs
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Continuation -> Eval [Value]
 evalExpr (Lit (Datum.Sym s)) cont = deref s >>= toCont1 cont
 evalExpr (Lit c) cont = toCont1 cont $ valueFromDatum $ Datum.Lexeme c
 evalExpr (Quote d) cont = toCont1 cont $ valueFromDatum d
-evalExpr (Lambda formals body) cont = do
-  env <- ask -- capture the environment
-  cont
-    [ Procedure $ -- create a procedure
-        \args cont' ->
-          local (const env) $ -- restore the captured environment
-            bindFormals formals args $ -- bind arg values to formal params
-              evalBody body cont' -- evaluate the body
-    ]
-evalExpr (Set var expr) cont = do
-  cont' <- close cont -- lock the continuation to the current environment
-  let assign val = set var val >> cont' []
-   in evalExpr expr =<< close (fromCont1 assign)
-evalExpr (If cond then' else') cont = do
-  cont' <- close cont
-  let branch (Bool False) = evalExpr else' cont'
-      branch _ = evalExpr then' cont'
-   in evalExpr cond =<< close (fromCont1 branch)
-evalExpr (Application funExpr argExprs) cont = do
-  cont' <- close cont
-  let applyProc (Procedure proc') = evalArgs argExprs =<< close (run proc')
+evalExpr (Lambda formals body) cont =
+  let run env args cont' =
+        close cont' -- capture the continuation's environment
+          >>= local (const env) -- restore the captured environment
+            . bindFormals formals args -- bind arg values to formal params
+            . evalBody body -- evaluate the body
+      close c = asks $ \e -> local (const e) . c
+   in cont . (: []) . Procedure . run =<< ask
+evalExpr (Set var expr) cont =
+  let assign val = set var val >> cont []
+   in evalExpr expr $ fromCont1 assign
+evalExpr (If cond then' else') cont =
+  let branch (Bool False) = evalExpr else' cont
+      branch _ = evalExpr then' cont
+   in evalExpr cond $ fromCont1 branch
+evalExpr (Application funExpr argExprs) cont =
+  let applyProc (Procedure proc') = evalArgs argExprs $ run proc'
       applyProc _ = throwError "not a procedure"
       evalArgs [] c = c []
-      evalArgs (e : es) c =
-        evalExpr e =<< close (\v -> evalArgs es =<< close (c . (++) v))
-      run proc' vs = allocAll vs >>= flip proc' cont'
-   in evalExpr funExpr =<< close (fromCont1 applyProc)
+      evalArgs (e : es) c = evalExpr e $ \v -> evalArgs es $ c . (++) v
+      run proc' vs = allocAll vs >>= flip proc' cont
+   in evalExpr funExpr $ fromCont1 applyProc
 
 -- | Bind the formals of a lambda expression some addresses.
 bindFormals :: Formals -> [Int] -> Eval a -> Eval a
@@ -271,8 +266,3 @@ bindFormals (Variadic _ _) [] _ = throwError "not enough arguments"
 evalBody :: NonEmpty Expression -> Continuation -> Eval [Value]
 evalBody (e :| []) c = evalExpr e c
 evalBody (e :| e' : es) c = evalExpr e $ const $ evalBody (e' :| es) c
-
-close :: Continuation -> Eval Continuation
-close c = do
-  env <- ask
-  return $ local (const env) . c
