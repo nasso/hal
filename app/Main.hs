@@ -62,9 +62,9 @@ repl = do
 evalAndPrint :: String -> Eval ()
 evalAndPrint s = withFormStr s displayAndLoop `catchError` displayError
   where
-    displayAndLoop Nothing = repl
-    displayAndLoop (Just Void) = repl
-    displayAndLoop (Just v) = liftIO (print v) >> repl
+    displayAndLoop [] = repl
+    displayAndLoop (Void : vs) = displayAndLoop vs
+    displayAndLoop (v : vs) = liftIO (print v) >> displayAndLoop vs
     displayError msg = liftIO (ePutStrLn msg) >> repl
 
 prompt :: IO ()
