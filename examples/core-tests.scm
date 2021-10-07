@@ -226,9 +226,9 @@
     )
 
     (suite "lists"
-        (test "cons" (lambda () (eqv? (cons 1 2) '(1 . 2))))
+        (test "cons" (lambda () (equal? (cons 1 2) '(1 . 2))))
         (test "car" (lambda () (eq? (car '(1 2 3)) 1)))
-        (test "cdr" (lambda () (eqv? (cdr '(1 2 3)) '(2 3))))
+        (test "cdr" (lambda () (equal? (cdr '(1 2 3)) '(2 3))))
         (test "cdr returns empty" (lambda () (eq? (cdr '(1)) '())))
     )
 )

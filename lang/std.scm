@@ -16,3 +16,6 @@
         )
     )
 ))
+
+; Not conformant to the standard: it doesn't handle cycles.
+(define equal? eqv?)

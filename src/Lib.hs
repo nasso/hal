@@ -21,14 +21,6 @@ import Datum (datum)
 import Number
 import Program (Parser, Var, form, program)
 import TreeWalker
-  ( Eval,
-    Value (..),
-    defineAll,
-    evalForm,
-    evalProgram,
-    fetch,
-    fetchAll,
-  )
 
 parseAst :: Program.Parser a -> String -> Maybe a
 parseAst p s = do
@@ -59,6 +51,9 @@ withStdLib = withBuiltins . withFile "lang/std.scm"
 
 withBuiltins :: Eval () -> Eval ()
 withBuiltins = defineAll builtins
+
+cbvProcCont :: ([Value] -> Continuation -> Eval [Value]) -> Value
+cbvProcCont f = Procedure (\a c -> fetchAll a >>= flip f c)
 
 cbrProc :: ([Int] -> Eval [Value]) -> Value
 cbrProc f = Procedure $ \args cont -> f args >>= cont
@@ -322,10 +317,26 @@ builtinNewline _ = throwError "newline: invalid arguments"
 -- | Utility procedures
 builtinUtils :: [(Var, Value)]
 builtinUtils =
-  [ ("void", cbvProc1 builtinVoid),
+  [ ("call-with-current-continuation", cbvProcCont builtinCallCc),
+    ("call/cc", cbvProcCont builtinCallCc),
+    ("exit", cbvProcCont builtinExit),
+    ("void", cbvProc1 builtinVoid),
     ("error", cbvProc1 builtinError),
     ("dump-env", cbvProc1 builtinDumpHeap)
   ]
+
+-- | Builtin call-with-current-continuation procedure.
+builtinCallCc :: [Value] -> Continuation -> Eval [Value]
+builtinCallCc [Procedure p] cnt = do
+  l <- alloc (Procedure escape)
+  p [l] cnt
+  where
+    escape vs _ = fetchAll vs >>= cnt
+builtinCallCc _ _ = throwError "call/cc: invalid arguments"
+
+-- | Builtin exit procedure.
+builtinExit :: [Value] -> Continuation -> Eval [Value]
+builtinExit vs _ = return vs
 
 -- | Builtin "void" procedure
 builtinVoid :: [Value] -> Eval Value
