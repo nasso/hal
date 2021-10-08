@@ -236,7 +236,7 @@ evalExpr (If cond then' else') cont =
    in evalExpr cond $ fromCont1 branch
 evalExpr (Application funExpr argExprs) cont =
   let applyProc (Procedure proc') = evalArgs argExprs $ run proc'
-      applyProc _ = throwError "not a procedure"
+      applyProc v = throwError $ "not a procedure: " ++ show v
       evalArgs [] c = c []
       evalArgs (e : es) c = evalExpr e $ \v -> evalArgs es $ c . (++) v
       run proc' vs = allocAll vs >>= flip proc' cont
