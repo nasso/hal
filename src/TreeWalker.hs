@@ -2,6 +2,8 @@ module TreeWalker
   ( Eval,
     Value (..),
     Continuation,
+    valueFromDatum,
+    datumFromValue,
     alloc,
     allocAll,
     bind,
@@ -119,6 +121,27 @@ valueFromDatum (Datum.List ds) = foldr Pair Empty $ valueFromDatum <$> ds
 valueFromDatum (Datum.ImproperList ds tl) =
   foldr Pair (valueFromDatum (Datum.Lexeme tl)) $ valueFromDatum <$> ds
 
+datumFromValue :: Value -> Maybe Datum
+datumFromValue Void = Nothing
+datumFromValue Empty = Just $ Datum.List []
+datumFromValue (Bool b) = Just $ Datum.Lexeme $ Datum.Bool b
+datumFromValue (Number n) = Just $ Datum.Lexeme $ Datum.Number n
+datumFromValue (Char c) = Just $ Datum.Lexeme $ Datum.Char c
+datumFromValue (String s) = Just $ Datum.Lexeme $ Datum.String s
+datumFromValue (Symbol s) = Just $ Datum.Lexeme $ Datum.Sym s
+datumFromValue (Pair car Empty) = do
+  car' <- datumFromValue car
+  return $ Datum.List [car']
+datumFromValue (Pair car cdr) = do
+  car' <- datumFromValue car
+  cdr' <- datumFromValue cdr
+  return $ case cdr' of
+    Datum.List das -> Datum.List (car' : das)
+    Datum.Lexeme con -> Datum.ImproperList (car' :| []) con
+    Datum.ImproperList (e :| es) con ->
+      Datum.ImproperList (car' :| e : es) con
+datumFromValue (Procedure _) = Nothing
+
 type Eval a = StateT (Heap Value) (ReaderT Env (ExceptT String IO)) a
 
 runEval :: Eval a -> IO (Either String a)
@@ -219,6 +242,9 @@ evalExpr :: Expression -> Continuation -> Eval [Value]
 evalExpr (Lit (Datum.Sym s)) cont = deref s >>= toCont1 cont
 evalExpr (Lit c) cont = toCont1 cont $ valueFromDatum $ Datum.Lexeme c
 evalExpr (Quote d) cont = toCont1 cont $ valueFromDatum d
+evalExpr (Begin (e :| [])) cont = evalExpr e cont
+evalExpr (Begin (e :| e' : es)) cont =
+  evalExpr e $ const $ evalExpr (Begin (e' :| es)) cont
 evalExpr (Lambda formals body) cont =
   let run env args cont' =
         close cont' -- capture the continuation's environment
