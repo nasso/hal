@@ -49,6 +49,11 @@ instance (Monad m, MonadPlus m) => MonadParser t (ParserT t m) where
       eat [] = empty
       eat (x : xs) = return (x, xs)
 
+  eof = ParserT eat
+    where
+      eat [] = pure ((), [])
+      eat _ = empty
+
   exec ts p = ParserT $ \s -> do
     r <- runParserT p ts
     pure (r, s)

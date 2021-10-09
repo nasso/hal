@@ -3,7 +3,6 @@
 
 module Control.Monad.MyTrans.Parser
   ( MonadParser (..),
-    eof,
     match,
     sepBy,
     like,
@@ -24,12 +23,11 @@ class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
   -- | Parse the next item.
   item :: m t
 
+  -- | Parser that succeeds if the stream is empty. Does not consume any items.
+  eof :: m ()
+
   -- | Run a parser on a different stream of items.
   exec :: [t] -> m a -> m (a, [t])
-
--- | Parse the end of the stream.
-eof :: MonadParser t m => m ()
-eof = (item >> empty) <|> return ()
 
 -- | Parse a single item satisfying the given predicate.
 match :: MonadParser t m => (t -> Bool) -> m t

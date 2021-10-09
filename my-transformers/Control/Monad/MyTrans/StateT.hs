@@ -64,6 +64,7 @@ instance MonadReader r m => MonadReader r (StateT s m) where
 
 instance MonadParser p m => MonadParser p (StateT s m) where
   item = lift item
+  eof = lift eof
   exec ts e = StateT $ \s -> do
     ((a, s'), p) <- exec ts (runStateT e s)
     return ((a, p), s')

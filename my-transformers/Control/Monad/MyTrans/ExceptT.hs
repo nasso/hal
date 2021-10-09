@@ -64,6 +64,7 @@ instance MonadReader r m => MonadReader r (ExceptT e m) where
 
 instance MonadParser t m => MonadParser t (ExceptT e m) where
   item = lift item
+  eof = lift eof
   exec ts e = ExceptT $ do
     v <- exec ts $ runExceptT e
     case v of

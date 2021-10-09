@@ -63,4 +63,5 @@ instance MonadExcept e m => MonadExcept e (ReaderT r m) where
 
 instance MonadParser p m => MonadParser p (ReaderT r m) where
   item = lift item
+  eof = lift eof
   exec ts e = ReaderT $ exec ts . runReaderT e
