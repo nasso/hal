@@ -1,0 +1,225 @@
+module Expand
+  ( PValue (..),
+    runExpand,
+    expandProgram,
+  )
+where
+
+import Control.Monad.MyTrans
+import Data.Functor.Identity (Identity (runIdentity))
+import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import Datum
+
+type Ident = String
+
+type Transformer = Datum -> Expand Datum
+
+data PValue
+  = Variable
+  | Macro Transformer
+
+data MaybeDeferred a
+  = Deferred (Expand a)
+  | Expanded a
+
+instance Functor MaybeDeferred where
+  fmap f (Deferred x) = Deferred (fmap f x)
+  fmap f (Expanded x) = Expanded (f x)
+
+instance Applicative MaybeDeferred where
+  pure = Expanded
+  Deferred f <*> Deferred x = Deferred (f <*> x)
+  Deferred f <*> Expanded x = Deferred (f <*> pure x)
+  Expanded f <*> Deferred x = Deferred (f <$> x)
+  Expanded f <*> Expanded x = Expanded (f x)
+
+instance Monad MaybeDeferred where
+  return = Expanded
+  Deferred x >>= f = Deferred $ do
+    x' <- x
+    case f x' of
+      Deferred y -> y
+      Expanded y -> pure y
+  Expanded x >>= f = f x
+
+sync :: MaybeDeferred a -> Expand a
+sync (Deferred x) = x
+sync (Expanded x) = pure x
+
+whenever ::
+  MaybeDeferred a ->
+  (a -> Expand b) ->
+  Expand (MaybeDeferred b)
+whenever (Deferred x) f = return $ Deferred (x >>= f)
+whenever (Expanded x) f = Expanded <$> f x
+
+type ExpandCtx = Map Ident PValue
+
+lookupIdent :: Ident -> ExpandCtx -> Maybe PValue
+lookupIdent = Map.lookup
+
+bindIdent :: Ident -> PValue -> ExpandCtx -> ExpandCtx
+bindIdent = Map.insert
+
+mergeEnv :: ExpandCtx -> ExpandCtx -> ExpandCtx
+mergeEnv = Map.union
+
+type Expand a = StateT ExpandCtx (ExceptT String Identity) a
+
+runExpand :: Expand a -> ExpandCtx -> Either String (a, ExpandCtx)
+runExpand e env' = runIdentity $ runExceptT $ runStateT e env'
+
+scope :: Expand a -> Expand a
+scope e = do
+  ctx <- get
+  e' <- e
+  put ctx
+  return e'
+
+expandProgram :: [Datum] -> Expand [Datum]
+expandProgram ds = do
+  eds <- sequence <$> mapM expandForm ds
+  sync eds
+
+expandForm :: Datum -> Expand (MaybeDeferred Datum)
+expandForm dat@(List (s@(Lexeme (Sym ident)) : ds)) = do
+  pv <- gets (lookupIdent ident)
+  e' <- case pv of
+    Just (Macro t) -> Just . Expanded <$> t dat -- macro use
+    Just Variable -> Just . Expanded <$> expandApplication (s :| ds) -- applic.
+    Nothing -> expandCoreForm dat -- unbound = core form
+  case e' of
+    Just e'' -> pure e''
+    Nothing -> throwError $ "Unbound symbol: " ++ ident
+expandForm dat@(Lexeme (Sym ident)) = do
+  pv <- gets (lookupIdent ident)
+  case pv of
+    Just (Macro t) -> Expanded <$> t dat
+    Just Variable -> pure $ Expanded dat
+    Nothing -> throwError $ "Unbound symbol: " ++ ident
+expandForm dat@(Lexeme _) = return $ Expanded dat
+expandForm (List (ds : ds')) = Expanded <$> expandApplication (ds :| ds')
+expandForm dat = throwError $ "Invalid syntax: " ++ show dat
+
+expandExpr :: Datum -> Expand Datum
+expandExpr d = do
+  f <- expandForm d >>= sync
+  def <- isDefinition f
+  if def
+    then throwError $ "Invalid context for definition " ++ show d
+    else pure f
+
+isDefinition :: Datum -> Expand Bool
+isDefinition (List [Lexeme (Sym "define"), Lexeme (Sym _), _]) = do
+  pv <- gets (lookupIdent "define")
+  case pv of
+    Just Variable -> pure False
+    _ -> pure True
+isDefinition (List (Lexeme (Sym "begin") : ds)) = do
+  pv <- gets (lookupIdent "begin")
+  case pv of
+    Just Variable -> pure False
+    _ -> and <$> mapM isDefinition ds
+isDefinition _ = pure False
+
+expandApplication :: NonEmpty Datum -> Expand Datum
+expandApplication (operator :| operands) = do
+  operator' <- expandExpr operator
+  operands' <- mapM expandExpr operands
+  pure $ List (operator' : operands')
+
+expandCoreForm :: Datum -> Expand (Maybe (MaybeDeferred Datum))
+expandCoreForm d@(List (Lexeme (Sym "define") : _)) =
+  Just . Deferred <$> expandDefine d
+expandCoreForm d@(List (Lexeme (Sym "begin") : _)) = Just <$> expandBegin d
+expandCoreForm d@(List (Lexeme (Sym "lambda") : _)) =
+  Just . Expanded <$> expandLambda d
+expandCoreForm d@(List (Lexeme (Sym "if") : _)) =
+  Just . Expanded <$> expandIf d
+expandCoreForm d@(List (Lexeme (Sym "quote") : _)) =
+  Just . Expanded <$> expandQuote d
+expandCoreForm d@(List (Lexeme (Sym "set!") : _)) =
+  Just . Expanded <$> expandSet d
+expandCoreForm _ = return Nothing
+
+expandDefine :: Datum -> Expand (Expand Datum)
+expandDefine (List [Lexeme (Sym "define"), Lexeme (Sym n), e]) = do
+  modify (bindIdent n Variable)
+  return $ do
+    e' <- expandExpr e
+    pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e']
+expandDefine ds = throwError $ "Invalid syntax: " ++ show ds
+
+expandBegin :: Datum -> Expand (MaybeDeferred Datum)
+expandBegin (List (Lexeme (Sym "begin") : ds)) = do
+  ds' <- sequence <$> mapM expandForm ds
+  whenever ds' $ \ds'' -> do
+    defs <- mapM isDefinition ds''
+    if allSame defs
+      then pure $ List $ Lexeme (Sym "begin") : ds''
+      else throwError $ "Invalid begin form " ++ show ds
+  where
+    allSame [] = True
+    allSame (b : bs) = all (== b) bs
+expandBegin d = throwError $ "Invalid syntax: " ++ show d
+
+expandLambda :: Datum -> Expand Datum
+expandLambda (List (Lexeme (Sym "lambda") : formals : body)) = do
+  body' <- withFormals formals (expandBody body)
+  pure $ List $ Lexeme (Sym "lambda") : formals : body'
+expandLambda ds = throwError $ "Invalid syntax: " ++ show ds
+
+withFormals :: Datum -> Expand [Datum] -> Expand [Datum]
+withFormals formals e = do
+  names <- checkFormals formals
+  let localEnv = Map.fromList (asVar <$> names)
+  scope (modify (mergeEnv localEnv) >> e)
+  where
+    asVar n = (n, Variable)
+
+checkFormals :: Datum -> Expand [String]
+checkFormals (Lexeme (Sym name)) = pure [name]
+checkFormals (List []) = pure []
+checkFormals (List (Lexeme (Sym n) : ds)) = do
+  names <- checkFormals $ List ds
+  return $ n : names
+checkFormals (List (p : _)) =
+  throwError $ "Invalid formal parameter: " ++ show p
+checkFormals (ImproperList l (Sym n)) = do
+  names <- checkFormals $ List $ NonEmpty.toList l
+  return $ n : names
+checkFormals (ImproperList _ a) =
+  throwError $ "Invalid formal parameter: " ++ show a
+checkFormals d = throwError $ "Invalid formal syntax: " ++ show d
+
+expandBody :: [Datum] -> Expand [Datum]
+expandBody [] = pure []
+expandBody (f : fs) = do
+  f' <- expandExpr f -- TODO: bodies can start with a series of definitions
+  fs' <- expandBody fs
+  pure $ f' : fs'
+
+expandIf :: Datum -> Expand Datum
+expandIf (List [Lexeme (Sym "if"), cond, then', else']) = do
+  cond' <- expandExpr cond
+  then'' <- expandExpr then'
+  else'' <- expandExpr else'
+  pure $ List [Lexeme (Sym "if"), cond', then'', else'']
+expandIf d = throwError $ "Invalid syntax: " ++ show d
+
+expandQuote :: Datum -> Expand Datum
+expandQuote dat@(List [Lexeme (Sym "quote"), _]) = pure dat
+expandQuote d = throwError $ "Invalid syntax: " ++ show d
+
+expandSet :: Datum -> Expand Datum
+expandSet (List [Lexeme (Sym "set!"), Lexeme (Sym name), value]) = do
+  pv <- gets (lookupIdent name)
+  case pv of
+    Just Variable -> do
+      value' <- expandExpr value
+      pure $ List [Lexeme (Sym "set!"), Lexeme (Sym name), value']
+    _ -> throwError $ "Not a variable: " ++ name
+expandSet d = throwError $ "Invalid syntax: " ++ show d
