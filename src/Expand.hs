@@ -5,6 +5,7 @@ module Expand
   )
 where
 
+import Control.Monad (join)
 import Control.Monad.MyTrans
 import Data.Functor.Identity (Identity (runIdentity))
 import Data.List.NonEmpty (NonEmpty (..))
@@ -49,13 +50,6 @@ sync :: MaybeDeferred a -> Expand a
 sync (Deferred x) = x
 sync (Expanded x) = pure x
 
-whenever ::
-  MaybeDeferred a ->
-  (a -> Expand b) ->
-  Expand (MaybeDeferred b)
-whenever (Deferred x) f = return $ Deferred (x >>= f)
-whenever (Expanded x) f = Expanded <$> f x
-
 type ExpandCtx = Map Ident PValue
 
 lookupIdent :: Ident -> ExpandCtx -> Maybe PValue
@@ -82,14 +76,14 @@ scope e = do
 expandProgram :: [Datum] -> Expand [Datum]
 expandProgram ds = do
   eds <- sequence <$> mapM expandForm ds
-  sync eds
+  (NonEmpty.toList =<<) <$> sync eds
 
-expandForm :: Datum -> Expand (MaybeDeferred Datum)
+expandForm :: Datum -> Expand (MaybeDeferred (NonEmpty Datum))
 expandForm dat@(List (s@(Lexeme (Sym ident)) : ds)) = do
   pv <- gets (lookupIdent ident)
   e' <- case pv of
-    Just (Macro t) -> Just . Expanded <$> t dat -- macro use
-    Just Variable -> Just . Expanded <$> expandApplication (s :| ds) -- applic.
+    Just (Macro t) -> Just . Expanded . (:| []) <$> t dat -- macro use
+    Just Variable -> Just . Expanded . (:| []) <$> expandApplication (s :| ds)
     Nothing -> expandCoreForm dat -- unbound = core form
   case e' of
     Just e'' -> pure e''
@@ -97,20 +91,24 @@ expandForm dat@(List (s@(Lexeme (Sym ident)) : ds)) = do
 expandForm dat@(Lexeme (Sym ident)) = do
   pv <- gets (lookupIdent ident)
   case pv of
-    Just (Macro t) -> Expanded <$> t dat
-    Just Variable -> pure $ Expanded dat
+    Just (Macro t) -> Expanded . (:| []) <$> t dat
+    Just Variable -> pure $ Expanded (dat :| [])
     Nothing -> throwError $ "Unbound symbol: " ++ ident
-expandForm dat@(Lexeme _) = return $ Expanded dat
-expandForm (List (ds : ds')) = Expanded <$> expandApplication (ds :| ds')
+expandForm dat@(Lexeme _) = return $ Expanded (dat :| [])
+expandForm (List (ds : ds')) =
+  Expanded . (:| []) <$> expandApplication (ds :| ds')
 expandForm dat = throwError $ "Invalid syntax: " ++ show dat
 
 expandExpr :: Datum -> Expand Datum
 expandExpr d = do
   f <- expandForm d >>= sync
-  def <- isDefinition f
-  if def
-    then throwError $ "Invalid context for definition " ++ show d
-    else pure f
+  allExprs <- and <$> mapM isExpression f
+  if allExprs
+    then return $ makeExpr f
+    else throwError $ "Invalid context for definition " ++ show d
+  where
+    makeExpr (e :| []) = e
+    makeExpr (e :| es) = List (Lexeme (Sym "begin") : e : es)
 
 isDefinition :: Datum -> Expand Bool
 isDefinition (List [Lexeme (Sym "define"), Lexeme (Sym _), _]) = do
@@ -125,24 +123,27 @@ isDefinition (List (Lexeme (Sym "begin") : ds)) = do
     _ -> and <$> mapM isDefinition ds
 isDefinition _ = pure False
 
+isExpression :: Datum -> Expand Bool
+isExpression = fmap not . isDefinition
+
 expandApplication :: NonEmpty Datum -> Expand Datum
 expandApplication (operator :| operands) = do
   operator' <- expandExpr operator
   operands' <- mapM expandExpr operands
   pure $ List (operator' : operands')
 
-expandCoreForm :: Datum -> Expand (Maybe (MaybeDeferred Datum))
+expandCoreForm :: Datum -> Expand (Maybe (MaybeDeferred (NonEmpty Datum)))
 expandCoreForm d@(List (Lexeme (Sym "define") : _)) =
-  Just . Deferred <$> expandDefine d
+  Just . Deferred . fmap (:| []) <$> expandDefine d
 expandCoreForm d@(List (Lexeme (Sym "begin") : _)) = Just <$> expandBegin d
 expandCoreForm d@(List (Lexeme (Sym "lambda") : _)) =
-  Just . Expanded <$> expandLambda d
+  Just . Expanded . (:| []) <$> expandLambda d
 expandCoreForm d@(List (Lexeme (Sym "if") : _)) =
-  Just . Expanded <$> expandIf d
+  Just . Expanded . (:| []) <$> expandIf d
 expandCoreForm d@(List (Lexeme (Sym "quote") : _)) =
-  Just . Expanded <$> expandQuote d
+  Just . Expanded . (:| []) <$> expandQuote d
 expandCoreForm d@(List (Lexeme (Sym "set!") : _)) =
-  Just . Expanded <$> expandSet d
+  Just . Expanded . (:| []) <$> expandSet d
 expandCoreForm _ = return Nothing
 
 expandDefine :: Datum -> Expand (Expand Datum)
@@ -153,17 +154,9 @@ expandDefine (List [Lexeme (Sym "define"), Lexeme (Sym n), e]) = do
     pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e']
 expandDefine ds = throwError $ "Invalid syntax: " ++ show ds
 
-expandBegin :: Datum -> Expand (MaybeDeferred Datum)
-expandBegin (List (Lexeme (Sym "begin") : ds)) = do
-  ds' <- sequence <$> mapM expandForm ds
-  whenever ds' $ \ds'' -> do
-    defs <- mapM isDefinition ds''
-    if allSame defs
-      then pure $ List $ Lexeme (Sym "begin") : ds''
-      else throwError $ "Invalid begin form " ++ show ds
-  where
-    allSame [] = True
-    allSame (b : bs) = all (== b) bs
+expandBegin :: Datum -> Expand (MaybeDeferred (NonEmpty Datum))
+expandBegin (List (Lexeme (Sym "begin") : d : ds)) =
+  fmap join . sequence <$> mapM expandForm (d :| ds)
 expandBegin d = throwError $ "Invalid syntax: " ++ show d
 
 expandLambda :: Datum -> Expand Datum

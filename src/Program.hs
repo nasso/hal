@@ -27,6 +27,7 @@ data Form = Def [(Var, Expression)] | Expr Expression deriving (Eq, Show)
 data Expression
   = Lit Constant
   | Quote Datum
+  | Begin (NonEmpty Expression)
   | Lambda Formals (NonEmpty Expression)
   | If Expression Expression Expression
   | Set Var Expression
@@ -89,6 +90,7 @@ expression =
   Lit <$> constant
     <|> properP
       ( Quote <$> (sym "quote" *> item)
+          <|> Begin <$> (sym "begin" *> NonEmpty.some1 expression)
           <|> Lambda <$> (sym "lambda" *> formals) <*> NonEmpty.some1 expression
           <|> If <$> (sym "if" *> expression) <*> expression <*> expression
           <|> Set <$> (sym "set!" *> var) <*> expression

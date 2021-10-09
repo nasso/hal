@@ -64,6 +64,7 @@ builtins =
   builtinList ++ builtinPredicates ++ builtinArithmetics
     ++ builtinIO
     ++ builtinUtils
+    ++ builtinDebug
 
 cbvProcCont :: ([Value] -> Continuation -> Eval [Value]) -> Value
 cbvProcCont f = Procedure (\a c -> fetchAll a >>= flip f c)
@@ -331,8 +332,7 @@ builtinUtils =
     ("apply", cbvProcCont builtinApply),
     ("exit", cbvProcCont builtinExit),
     ("void", cbvProc1 builtinVoid),
-    ("error", cbvProc1 builtinError),
-    ("dump-env", cbvProc1 builtinDumpHeap)
+    ("error", cbvProc1 builtinError)
   ]
 
 -- | Builtin call-with-current-continuation procedure.
@@ -376,7 +376,25 @@ builtinError :: [Value] -> Eval Value
 builtinError (String who : String msg : _) = throwError $ who ++ ": " ++ msg
 builtinError _ = throwError "error: invalid arguments"
 
+-- | Debugging procedures
+builtinDebug :: [(Var, Value)]
+builtinDebug =
+  [ ("dump-heap", cbvProc1 builtinDumpHeap),
+    ("expand", cbvProc builtinExpand)
+  ]
+
 -- | Builtin "dump-heap" procedure
 builtinDumpHeap :: [Value] -> Eval Value
 builtinDumpHeap [] = get >>= (liftIO . print) >> return Empty
 builtinDumpHeap _ = throwError "dump-heap: too many arguments"
+
+-- | Builtin "expand" procedure
+builtinExpand :: [Value] -> Eval [Value]
+builtinExpand [v] = do
+  v' <- case datumFromValue v of
+    Nothing -> throwError $ "Invalid syntax: " ++ show v
+    Just v' -> pure v'
+  expandCtx <- asks $ Map.map (const Variable)
+  (ds, _) <- liftEither $ runExpand (expandProgram [v']) expandCtx
+  return $ valueFromDatum <$> ds
+builtinExpand _ = throwError "expand: invalid arguments"
