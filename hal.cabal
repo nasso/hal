@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4a5c7b9c52d4817e792ce0500614549583a63f39d59fec5f64885e85c7a1a957
+-- hash: 12ceb280bf1b9b43bd1021c5d69319f35843d4de4d76ab4f231e4e9eeca81be3
 
 name:           hal
 version:        0.1.0.0
@@ -28,6 +28,7 @@ source-repository head
 library
   exposed-modules:
       Datum
+      Expand
       Heap
       Lib
       Number

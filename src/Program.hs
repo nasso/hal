@@ -76,10 +76,13 @@ form = Def <$> definition <|> Expr <$> expression
 
 definition :: Parser [(Var, Expression)]
 definition =
-  properP
-    ( (: []) <$> ((,) <$> (sym "define" *> var) <*> expression)
-        <|> join <$> (sym "begin" >> many definition)
-    )
+  join
+    <$> some
+      ( properP
+          ( (: []) <$> ((,) <$> (sym "define" *> var) <*> expression)
+              <|> join <$> (sym "begin" >> many definition)
+          )
+      )
 
 expression :: Parser Expression
 expression =

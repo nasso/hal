@@ -10,34 +10,40 @@ where
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.MyTrans.ExceptT
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.ParserT
-import Control.Monad.MyTrans.StateT
+import Control.Monad.MyTrans
 import Data.Fixed
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
+import qualified Data.Map.Strict as Map
 import Data.Ratio (denominator, numerator)
 import Datum (datum)
+import Expand
 import Number
 import Program (Parser, Var, form, program)
 import TreeWalker
 
-parseAst :: Program.Parser a -> String -> Maybe a
+maybeToEither :: a -> Maybe b -> Either a b
+maybeToEither _ (Just x) = Right x
+maybeToEither x Nothing = Left x
+
+parseAst :: Program.Parser a -> String -> Eval a
 parseAst p s = do
-  (ds, []) <- runParserT (many datum) s
-  (ast, []) <- runParserT p ds
-  return ast
+  ds <- liftEither $ maybeToEither "Syntax error" $ parse (many datum <* eof) s
+  expandCtx <- asks $ Map.map (const Variable)
+  (ds', _) <- liftEither $ runExpand (expandProgram ds) expandCtx
+  liftEither $ maybeToEither "Core syntax error" $ parse p ds'
+  where
+    parse p' s' = fst <$> runParserT (p' <* eof) s'
 
 withFormStr :: String -> ([Value] -> Eval ()) -> Eval ()
-withFormStr s e = case parseAst Program.form s of
-  Nothing -> throwError "Syntax error"
-  Just f -> evalForm f e
+withFormStr s e = do
+  f <- parseAst Program.form s
+  evalForm f e
 
 withProgramStr :: String -> Eval () -> Eval ()
-withProgramStr s e = case parseAst Program.program s of
-  Nothing -> throwError "Syntax error"
-  Just p -> evalProgram p e
+withProgramStr s e = do
+  p <- parseAst Program.program s
+  evalProgram p e
 
 withFile :: FilePath -> Eval () -> Eval ()
 withFile f e = do
@@ -53,6 +59,12 @@ withStdLib = withBuiltins . withFile "lang/std.scm"
 withBuiltins :: Eval () -> Eval ()
 withBuiltins = defineAll builtins
 
+builtins :: [(Var, Value)]
+builtins =
+  builtinList ++ builtinPredicates ++ builtinArithmetics
+    ++ builtinIO
+    ++ builtinUtils
+
 cbvProcCont :: ([Value] -> Continuation -> Eval [Value]) -> Value
 cbvProcCont f = Procedure (\a c -> fetchAll a >>= flip f c)
 
@@ -67,12 +79,6 @@ cbrProc1 f = cbrProc $ fmap (: []) . f
 
 cbvProc1 :: ([Value] -> Eval Value) -> Value
 cbvProc1 f = cbvProc $ fmap (: []) . f
-
-builtins :: [(Var, Value)]
-builtins =
-  builtinList ++ builtinPredicates ++ builtinArithmetics
-    ++ builtinIO
-    ++ builtinUtils
 
 builtinList :: [(Var, Value)]
 builtinList =
