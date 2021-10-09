@@ -1,3 +1,5 @@
 (define foo (lambda (a) (lambda () a)))
 
-(eq? ((foo 3)) 3)
+(if (eq? ((foo 3)) 3)
+    (display "OK!")
+    (display "KO!"))
