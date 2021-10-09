@@ -16,6 +16,7 @@ import Control.Monad.MyTrans.ParserT
 import Control.Monad.MyTrans.StateT
 import Data.Fixed
 import Data.Functor
+import Data.List.NonEmpty (NonEmpty (..))
 import Data.Ratio (denominator, numerator)
 import Datum (datum)
 import Number
@@ -321,6 +322,7 @@ builtinUtils =
     ("call/cc", cbvProcCont builtinCallCc),
     ("values", cbvProc pure),
     ("call-with-values", cbvProcCont builtinCallWithValues),
+    ("apply", cbvProcCont builtinApply),
     ("exit", cbvProcCont builtinExit),
     ("void", cbvProc1 builtinVoid),
     ("error", cbvProc1 builtinError),
@@ -343,6 +345,16 @@ builtinCallWithValues [Procedure p, Procedure c] cont = do
     as <- allocAll vs
     c as cont
 builtinCallWithValues _ _ = throwError "call-with-values: invalid arguments"
+
+-- | Builtin apply procedure.
+builtinApply :: [Value] -> Continuation -> Eval [Value]
+builtinApply (Procedure p : a : as) cnt = unroll (a :| as) >>= flip p cnt
+  where
+    unroll (Empty :| []) = pure []
+    unroll (Pair car b :| []) = do v <- alloc car; (:) v <$> unroll (b :| [])
+    unroll (v :| vs : vs') = do v' <- alloc v; (:) v' <$> unroll (vs :| vs')
+    unroll _ = throwError "apply: invalid arguments"
+builtinApply _ _ = throwError "apply: invalid arguments"
 
 -- | Builtin exit procedure.
 builtinExit :: [Value] -> Continuation -> Eval [Value]
