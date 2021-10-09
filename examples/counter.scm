@@ -1,9 +1,9 @@
 (define print (lambda xs
   (if (null? xs)
     (newline)
-    ((lambda ()
+    (begin
       (display (car xs))
-      (apply print (cdr xs)))))))
+      (apply print (cdr xs))))))
 
 (define make-counter
   (lambda (value)

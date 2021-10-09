@@ -1,10 +1,10 @@
 (define for-each (lambda (f vs)
     (if (null? vs)
         (void)
-        ((lambda ()
+        (begin
             (f (car vs))
             (for-each f (cdr vs))
-        ))
+        )
     )
 ))
 
