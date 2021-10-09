@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 12ceb280bf1b9b43bd1021c5d69319f35843d4de4d76ab4f231e4e9eeca81be3
+-- hash: b42c39d6a2a300ea782279874f19e9f647a64202e85b4635cb3887993a358fb5
 
 name:           hal
 version:        0.1.0.0
@@ -27,6 +27,7 @@ source-repository head
 
 library
   exposed-modules:
+      BaseLib.Procedure
       Datum
       Expand
       Heap
