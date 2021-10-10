@@ -34,11 +34,10 @@ parseArgs args _ = return $ Just args
 handleArgs :: Maybe Args -> IO ()
 handleArgs Nothing = exitWithMessage "Invalid arguments."
 handleArgs (Just Help) = printUsage
-handleArgs (Just (Args files i)) = do
-  r <- runEval (vm files (i || null files))
-  case r of
-    Left err -> exitWithMessage err
-    Right _ -> return ()
+handleArgs (Just (Args files i)) = runEval (vm files (i || null files)) k
+  where
+    k (Left err) = exitWithMessage err
+    k (Right _) = return ()
 
 printUsage :: IO ()
 printUsage = do

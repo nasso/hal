@@ -24,9 +24,7 @@ module TreeWalker
 where
 
 import Control.Monad
-import Control.Monad.MyTrans.ExceptT
-import Control.Monad.MyTrans.ReaderT
-import Control.Monad.MyTrans.StateT
+import Control.Monad.MyTrans
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
@@ -142,12 +140,14 @@ datumFromValue (Pair car cdr) = do
       Datum.ImproperList (car' :| e : es) con
 datumFromValue (Procedure _) = Nothing
 
-type Eval a = ReaderT Env (StateT (Heap Value) (ExceptT String IO)) a
+type Eval a = ExceptT String (ReaderT Env (ContT () (StateT (Heap Value) IO))) a
 
-runEval :: Eval a -> IO (Either String a)
-runEval e = do
-  v <- runExceptT $ runStateT (runReaderT e emptyEnv) Heap.empty
-  return $ fst <$> v
+runEval :: Eval a -> (Either String a -> IO ()) -> IO ()
+runEval e k =
+  let r = runExceptT e
+      c = runReaderT r emptyEnv
+      s = runContT c (liftIO . k)
+   in fst <$> runStateT s Heap.empty
 
 -- | Allocate a new value in the heap and return its address.
 alloc :: Value -> Eval Int
