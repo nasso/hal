@@ -5,6 +5,7 @@
 module Control.Monad.MyTrans.ContT
   ( module Control.Monad.MyTrans.Cont,
     ContT (..),
+    evalContT,
   )
 where
 
@@ -44,3 +45,7 @@ instance MonadState s m => MonadState s (ContT r m) where
 instance MonadReader r' m => MonadReader r' (ContT r m) where
   ask = lift ask
   local f st = ContT $ \k -> local f (runContT st k)
+
+-- | Equivalent to calling @runContT@ with @pure@ as the final continuation.
+evalContT :: Monad m => ContT r m r -> m r
+evalContT k = runContT k pure
