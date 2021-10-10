@@ -22,17 +22,11 @@ baseProcedures =
     ++ builtinUtils
     ++ builtinDebug
 
-cbvProcCont :: ([Value] -> Continuation -> Eval [Value]) -> Value
-cbvProcCont f = Procedure (\a c -> fetchAll a >>= flip f c)
-
-cbrProc :: ([Int] -> Eval [Value]) -> Value
-cbrProc f = Procedure $ \args cont -> f args >>= cont
-
 cbvProc :: ([Value] -> Eval [Value]) -> Value
-cbvProc f = cbrProc $ fetchAll >=> f
+cbvProc f = Procedure $ fetchAll >=> f
 
 cbrProc1 :: ([Int] -> Eval Value) -> Value
-cbrProc1 f = cbrProc $ fmap (: []) . f
+cbrProc1 f = Procedure $ fmap (: []) . f
 
 cbvProc1 :: ([Value] -> Eval Value) -> Value
 cbvProc1 f = cbvProc $ fmap (: []) . f
@@ -281,46 +275,37 @@ builtinNewline _ = throwError "newline: invalid arguments"
 -- | Utility procedures
 builtinUtils :: [(Var, Value)]
 builtinUtils =
-  [ ("call-with-current-continuation", cbvProcCont builtinCallCc),
-    ("call/cc", cbvProcCont builtinCallCc),
+  [ ("call-with-current-continuation", cbvProc builtinCallCc),
+    ("call/cc", cbvProc builtinCallCc),
     ("values", cbvProc pure),
-    ("call-with-values", cbvProcCont builtinCallWithValues),
-    ("apply", cbvProcCont builtinApply),
-    ("exit", cbvProcCont builtinExit),
+    ("call-with-values", cbvProc builtinCallWithValues),
+    ("apply", cbvProc builtinApply),
     ("void", cbvProc1 builtinVoid),
     ("error", cbvProc1 builtinError)
   ]
 
 -- | Builtin call-with-current-continuation procedure.
-builtinCallCc :: [Value] -> Continuation -> Eval [Value]
-builtinCallCc [Procedure p] cnt = do
-  l <- alloc (Procedure escape)
-  p [l] cnt
-  where
-    escape vs _ = fetchAll vs >>= cnt
-builtinCallCc _ _ = throwError "call/cc: invalid arguments"
+builtinCallCc :: [Value] -> Eval [Value]
+builtinCallCc [Procedure p] =
+  callCC $ \escape -> do
+    l <- alloc (Procedure $ fetchAll >=> escape)
+    p [l]
+builtinCallCc _ = throwError "call/cc: invalid arguments"
 
 -- | Builtin call-with-values procedure.
-builtinCallWithValues :: [Value] -> Continuation -> Eval [Value]
-builtinCallWithValues [Procedure p, Procedure c] cont = do
-  p [] $ \vs -> do
-    as <- allocAll vs
-    c as cont
-builtinCallWithValues _ _ = throwError "call-with-values: invalid arguments"
+builtinCallWithValues :: [Value] -> Eval [Value]
+builtinCallWithValues [Procedure p, Procedure c] = p [] >>= allocAll >>= c
+builtinCallWithValues _ = throwError "call-with-values: invalid arguments"
 
 -- | Builtin apply procedure.
-builtinApply :: [Value] -> Continuation -> Eval [Value]
-builtinApply (Procedure p : a : as) cnt = unroll (a :| as) >>= flip p cnt
+builtinApply :: [Value] -> Eval [Value]
+builtinApply (Procedure p : a : as) = unroll (a :| as) >>= p
   where
     unroll (Empty :| []) = pure []
     unroll (Pair car b :| []) = do v <- alloc car; (:) v <$> unroll (b :| [])
     unroll (v :| vs : vs') = do v' <- alloc v; (:) v' <$> unroll (vs :| vs')
     unroll _ = throwError "apply: invalid arguments"
-builtinApply _ _ = throwError "apply: invalid arguments"
-
--- | Builtin exit procedure.
-builtinExit :: [Value] -> Continuation -> Eval [Value]
-builtinExit vs _ = return vs
+builtinApply _ = throwError "apply: invalid arguments"
 
 -- | Builtin "void" procedure
 builtinVoid :: [Value] -> Eval Value
