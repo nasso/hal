@@ -142,11 +142,11 @@ datumFromValue (Pair car cdr) = do
       Datum.ImproperList (car' :| e : es) con
 datumFromValue (Procedure _) = Nothing
 
-type Eval a = StateT (Heap Value) (ReaderT Env (ExceptT String IO)) a
+type Eval a = ReaderT Env (StateT (Heap Value) (ExceptT String IO)) a
 
 runEval :: Eval a -> IO (Either String a)
 runEval e = do
-  v <- runExceptT $ runReaderT (runStateT e Heap.empty) emptyEnv
+  v <- runExceptT $ runStateT (runReaderT e emptyEnv) Heap.empty
   return $ fst <$> v
 
 -- | Allocate a new value in the heap and return its address.
