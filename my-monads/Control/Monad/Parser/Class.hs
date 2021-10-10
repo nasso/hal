@@ -17,20 +17,21 @@ where
 
 import Control.Applicative (Alternative (empty, many, (<|>)), (<**>))
 import Control.Monad (MonadPlus)
+import Data.Stream
 
 -- | A monad that parses a stream of items.
-class (Monad m, MonadPlus m) => MonadParser t m | m -> t where
+class (Monad m, MonadPlus m, Stream s) => MonadParser s m | m -> s where
   -- | Parse the next item.
-  item :: m t
+  item :: m (Item s)
 
   -- | Parser that succeeds if the stream is empty. Does not consume any items.
   eof :: m ()
 
   -- | Run a parser on a different stream of items.
-  exec :: [t] -> m a -> m (a, [t])
+  exec :: s -> m a -> m (a, s)
 
 -- | Parse a single item satisfying the given predicate.
-match :: MonadParser t m => (t -> Bool) -> m t
+match :: MonadParser s m => (Item s -> Bool) -> m (Item s)
 match f = do
   x <- item
   if f x
@@ -38,30 +39,30 @@ match f = do
     else empty
 
 -- | Parse a series of `a` separated by `b`s (without a leading `b`).
-sepBy :: MonadParser t m => m a -> m b -> m [a]
+sepBy :: MonadParser s m => m a -> m b -> m [a]
 sepBy w s = do
   a <- w
   rest <- many (s >> w)
   return $ a : rest
 
 -- | Parse any value equal to `a`.
-like :: (Eq t, MonadParser t m) => t -> m t
+like :: (MonadParser s m, Eq (Item s)) => Item s -> m (Item s)
 like a = match (== a)
 
 -- | Parse any value not equal to `a`.
-unlike :: (Eq t, MonadParser t m) => t -> m t
+unlike :: (MonadParser s m, Eq (Item s)) => Item s -> m (Item s)
 unlike a = match (/= a)
 
 -- | Parse any value equal to at least one element of the given list.
-oneOf :: (Eq t, MonadParser t m) => [t] -> m t
+oneOf :: (MonadParser s m, Eq (Item s)) => [Item s] -> m (Item s)
 oneOf l = match (`elem` l)
 
 -- | Parse any value not equivalent to any element of the given list.
-noneOf :: (Eq t, MonadParser t m) => [t] -> m t
+noneOf :: (MonadParser s m, Eq (Item s)) => [Item s] -> m (Item s)
 noneOf l = match (`notElem` l)
 
 -- | Parse a continuous sequence of items equal to the given one.
-string :: (Eq t, MonadParser t m) => [t] -> m [t]
+string :: (MonadParser s m, Eq (Item s)) => [Item s] -> m [Item s]
 string [] = return []
 string (x : xs) = like x >> string xs >> return (x : xs)
 

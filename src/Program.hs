@@ -39,7 +39,7 @@ data Formals
   | Variadic [Var] Var
   deriving (Eq, Show)
 
-type Parser a = ParserT Datum Maybe a
+type Parser a = ParserT [Datum] Maybe a
 
 constant :: Parser Constant
 constant = do
