@@ -49,7 +49,11 @@ printUsage = do
   putStrLn $ "  " ++ name ++ " --help"
 
 vm :: [FilePath] -> Bool -> Eval ()
-vm files i = withBaseLib $ withFiles files $ when i repl
+vm files i =
+  withBaseLib $
+    withFiles files $
+      when i $
+        callCC $ \exit -> define "exit" (Procedure $ const $ exit ()) repl
 
 repl :: Eval ()
 repl = do
