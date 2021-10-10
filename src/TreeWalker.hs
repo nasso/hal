@@ -23,11 +23,11 @@ module TreeWalker
 where
 
 import Control.Monad
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Cont
-import Control.Monad.Trans.Reader
 import Control.Monad.IO.Class
+import Control.Monad.Trans.Cont
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
@@ -224,7 +224,7 @@ evalForm :: Form -> ([Value] -> Eval ()) -> Eval ()
 evalForm (Expr expr) e = void $ evalExpr expr >>= e
 evalForm (Def def) e = evalDef def $ e []
 
--- | Evaluates a series of definition like letrec*, and run @ev@ in the new
+-- | Evaluates a series of definition like @letrec*@, and run @ev@ in the new
 -- environment.
 evalDef :: [(Var, Expression)] -> Eval () -> Eval ()
 evalDef defs ev = do

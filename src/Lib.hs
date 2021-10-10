@@ -10,9 +10,9 @@ where
 import BaseLib.Procedure
 import Control.Applicative
 import Control.Monad.Except.Class
-import Control.Monad.Reader.Class
-import Control.Monad.Parser.Class
 import Control.Monad.IO.Class
+import Control.Monad.Parser.Class
+import Control.Monad.Reader.Class
 import Control.Monad.Trans.Parser
 import qualified Data.Map.Strict as Map
 import Datum (datum)

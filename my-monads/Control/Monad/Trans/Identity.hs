@@ -5,8 +5,8 @@ where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus (..))
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
 
 -- | The identity monad transformer maps a monad to an equivalent monad.
 newtype IdentityT m a = IdentityT {runIdentityT :: m a}

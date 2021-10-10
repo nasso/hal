@@ -10,13 +10,13 @@ where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
 import Control.Monad.Parser.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
+import Control.Monad.Trans.Class (MonadTrans (..))
 
 -- | Reader monad transformer.
 newtype ReaderT r m a = ReaderT {runReaderT :: r -> m a}
