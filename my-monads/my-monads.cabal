@@ -37,6 +37,7 @@ library
       Control.Monad.Trans.Parser
       Control.Monad.Trans.Reader
       Control.Monad.Trans.State
+      Data.Stream
   other-modules:
       Paths_my_monads
   hs-source-dirs:

@@ -31,7 +31,7 @@ import Number
 import Numeric (readDec, readHex, readInt, readOct)
 
 -- | A parser from `String` to values of type `a`.
-type Parser a = ParserT Char Maybe a
+type Parser a = ParserT String Maybe a
 
 -- | Parse a continuous sequence of items not containing the given string.
 commentText :: Parser ()
