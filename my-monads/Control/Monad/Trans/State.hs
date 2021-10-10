@@ -2,8 +2,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.MyTrans.StateT
-  ( module Control.Monad.MyTrans.State,
+module Control.Monad.Trans.State
+  ( module Control.Monad.State.Class,
     StateT (..),
     statefulCallCC,
     localCallCC,
@@ -12,13 +12,13 @@ where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.Cont
-import Control.Monad.MyTrans.Except
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.Parser
-import Control.Monad.MyTrans.Reader
-import Control.Monad.MyTrans.State
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Cont.Class
+import Control.Monad.Except.Class
+import Control.Monad.IO.Class
+import Control.Monad.Parser.Class
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 import Data.Bifunctor (Bifunctor (first))
 
 -- | StateT is a monad transformer that adds state to a monad.

@@ -23,7 +23,11 @@ module TreeWalker
 where
 
 import Control.Monad
-import Control.Monad.MyTrans
+import Control.Monad.Trans.State
+import Control.Monad.Trans.Except
+import Control.Monad.Trans.Cont
+import Control.Monad.Trans.Reader
+import Control.Monad.IO.Class
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)

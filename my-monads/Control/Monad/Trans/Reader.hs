@@ -2,21 +2,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.MyTrans.ReaderT
-  ( module Control.Monad.MyTrans.Reader,
+module Control.Monad.Trans.Reader
+  ( module Control.Monad.Reader.Class,
     ReaderT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.Cont
-import Control.Monad.MyTrans.Except
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.Parser
-import Control.Monad.MyTrans.Reader
-import Control.Monad.MyTrans.State
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Cont.Class
+import Control.Monad.Except.Class
+import Control.Monad.IO.Class
+import Control.Monad.Parser.Class
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 
 -- | Reader monad transformer.
 newtype ReaderT r m a = ReaderT {runReaderT :: r -> m a}

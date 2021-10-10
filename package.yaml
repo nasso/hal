@@ -21,9 +21,9 @@ description:
   Please see the README on GitHub at <https://github.com/githubuser/hal#readme>
 
 dependencies:
-  - base >= 4.7 && < 5
+  - base >= 4.9 && < 5
   - containers >= 0.6 && < 0.7
-  - my-transformers
+  - my-monads
 
 library:
   source-dirs: src

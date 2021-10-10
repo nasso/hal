@@ -1,4 +1,4 @@
-module Control.Monad.MyTrans.Class
+module Control.Monad.Trans.Class
   ( MonadTrans (..),
   )
 where

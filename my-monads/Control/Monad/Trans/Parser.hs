@@ -2,21 +2,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.MyTrans.ParserT
-  ( module Control.Monad.MyTrans.Parser,
+module Control.Monad.Trans.Parser
+  ( module Control.Monad.Parser.Class,
     ParserT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.Cont
-import Control.Monad.MyTrans.Except
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.Parser
-import Control.Monad.MyTrans.Reader
-import Control.Monad.MyTrans.State
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Cont.Class
+import Control.Monad.Except.Class
+import Control.Monad.IO.Class
+import Control.Monad.Parser.Class
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 import Data.Bifunctor (Bifunctor (first))
 
 -- | Parser monad transformer.

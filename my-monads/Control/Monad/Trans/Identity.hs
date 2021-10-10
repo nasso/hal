@@ -1,12 +1,12 @@
-module Control.Monad.MyTrans.IdentityT
+module Control.Monad.Trans.Identity
   ( IdentityT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus (..))
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.IO (MonadIO (..))
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.IO.Class (MonadIO (..))
 
 -- | The identity monad transformer maps a monad to an equivalent monad.
 newtype IdentityT m a = IdentityT {runIdentityT :: m a}
