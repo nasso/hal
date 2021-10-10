@@ -11,6 +11,7 @@ where
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.Cont
 import Control.Monad.MyTrans.Except
 import Control.Monad.MyTrans.IO
 import Control.Monad.MyTrans.Parser
@@ -70,3 +71,8 @@ instance MonadParser t m => MonadParser t (ExceptT e m) where
     case v of
       (Left e', _) -> return $ Left e'
       (Right a, ts') -> return $ Right (a, ts')
+
+instance MonadCont m => MonadCont (ExceptT e m) where
+  callCC f =
+    ExceptT $
+      callCC $ \c -> runExceptT (f $ ExceptT . c . Right)
