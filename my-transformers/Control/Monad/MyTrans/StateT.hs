@@ -5,12 +5,15 @@
 module Control.Monad.MyTrans.StateT
   ( module Control.Monad.MyTrans.State,
     StateT (..),
+    statefulCallCC,
+    localCallCC,
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.Cont
 import Control.Monad.MyTrans.Except
 import Control.Monad.MyTrans.IO
 import Control.Monad.MyTrans.Parser
@@ -68,3 +71,23 @@ instance MonadParser p m => MonadParser p (StateT s m) where
   exec ts e = StateT $ \s -> do
     ((a, s'), p) <- exec ts (runStateT e s)
     return ((a, p), s')
+
+-- | This implementation of callCC will retain the state of the StateT
+-- computation when the continuation is called.
+statefulCallCC ::
+  MonadCont m =>
+  ((a1 -> StateT b m a2) -> StateT b m a1) ->
+  StateT b m a1
+statefulCallCC f = StateT $
+  \s -> callCC $
+    \k -> runStateT (f (\a -> StateT $ \s' -> k (a, s'))) s
+
+-- | This implementation of callCC will discard the state of the StateT
+-- computation when the continuation is called.
+localCallCC ::
+  MonadCont m =>
+  ((a1 -> StateT b m a2) -> StateT b m a1) ->
+  StateT b m a1
+localCallCC f = StateT $
+  \s -> callCC $
+    \k -> runStateT (f (\a -> StateT $ \_ -> k (a, s))) s

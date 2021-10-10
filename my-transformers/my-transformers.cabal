@@ -26,6 +26,8 @@ library
   exposed-modules:
       Control.Monad.MyTrans
       Control.Monad.MyTrans.Class
+      Control.Monad.MyTrans.Cont
+      Control.Monad.MyTrans.ContT
       Control.Monad.MyTrans.Except
       Control.Monad.MyTrans.ExceptT
       Control.Monad.MyTrans.IdentityT

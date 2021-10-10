@@ -11,6 +11,7 @@ where
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.Cont
 import Control.Monad.MyTrans.Except
 import Control.Monad.MyTrans.IO
 import Control.Monad.MyTrans.Parser
@@ -65,3 +66,7 @@ instance MonadParser p m => MonadParser p (ReaderT r m) where
   item = lift item
   eof = lift eof
   exec ts e = ReaderT $ exec ts . runReaderT e
+
+instance MonadCont m => MonadCont (ReaderT r m) where
+  callCC f =
+    ReaderT $ \r -> callCC $ \k -> runReaderT (f (ReaderT . const . k)) r

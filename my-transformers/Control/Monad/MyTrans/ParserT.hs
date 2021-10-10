@@ -11,6 +11,7 @@ where
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
 import Control.Monad.MyTrans.Class (MonadTrans (..))
+import Control.Monad.MyTrans.Cont
 import Control.Monad.MyTrans.Except
 import Control.Monad.MyTrans.IO
 import Control.Monad.MyTrans.Parser
@@ -81,3 +82,9 @@ instance MonadExcept e m => MonadExcept e (ParserT t m) where
 instance MonadReader r m => MonadReader r (ParserT t m) where
   ask = lift ask
   local f st = ParserT $ \s -> local f (runParserT st s)
+
+instance MonadCont m => MonadCont (ParserT t m) where
+  callCC f =
+    ParserT $
+      \s -> callCC $
+        \k -> runParserT (f $ \a -> ParserT $ \s' -> k (a, s')) s
