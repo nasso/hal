@@ -7,10 +7,12 @@ module Control.Monad.MyTrans
     module Control.Monad.MyTrans.ParserT,
     module Control.Monad.MyTrans.ReaderT,
     module Control.Monad.MyTrans.StateT,
+    module Control.Monad.MyTrans.ContT,
   )
 where
 
 import Control.Monad.MyTrans.Class
+import Control.Monad.MyTrans.ContT
 import Control.Monad.MyTrans.ExceptT
 import Control.Monad.MyTrans.IO
 import Control.Monad.MyTrans.IdentityT
