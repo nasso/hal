@@ -12,13 +12,13 @@ where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
 import Control.Monad.Parser.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
+import Control.Monad.Trans.Class (MonadTrans (..))
 import Data.Bifunctor (Bifunctor (first))
 
 -- | StateT is a monad transformer that adds state to a monad.

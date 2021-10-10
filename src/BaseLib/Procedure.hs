@@ -4,9 +4,9 @@ module BaseLib.Procedure
 where
 
 import Control.Monad
-import Control.Monad.IO.Class
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
+import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Data.Fixed

@@ -9,11 +9,11 @@ module Control.Monad.Trans.Cont
   )
 where
 
-import Control.Monad.Trans.Class (MonadTrans (..))
 import Control.Monad.Cont.Class
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
+import Control.Monad.Trans.Class (MonadTrans (..))
 
 -- | A monad transformer that adds continuation passing to another monad.
 newtype ContT r m a = ContT {runContT :: (a -> m r) -> m r}
