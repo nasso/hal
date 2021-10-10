@@ -2,21 +2,21 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.MyTrans.ExceptT
-  ( module Control.Monad.MyTrans.Except,
+module Control.Monad.Trans.Except
+  ( module Control.Monad.Except.Class,
     ExceptT (..),
   )
 where
 
 import Control.Applicative (Alternative (empty, (<|>)))
 import Control.Monad (MonadPlus)
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.Cont
-import Control.Monad.MyTrans.Except
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.Parser
-import Control.Monad.MyTrans.Reader
-import Control.Monad.MyTrans.State
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Cont.Class
+import Control.Monad.Except.Class
+import Control.Monad.IO.Class
+import Control.Monad.Parser.Class
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 
 -- | A monad transformer that adds an error type to a monad.
 newtype ExceptT e m a = ExceptT {runExceptT :: m (Either e a)}

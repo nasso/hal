@@ -1,6 +1,6 @@
 {-# LANGUAGE FunctionalDependencies #-}
 
-module Control.Monad.MyTrans.Reader
+module Control.Monad.Reader.Class
   ( MonadReader (..),
     asks,
   )

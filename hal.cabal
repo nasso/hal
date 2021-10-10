@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b42c39d6a2a300ea782279874f19e9f647a64202e85b4635cb3887993a358fb5
+-- hash: b3b18371102589e074c1c024a27e715e1b5d1a1adbcc94cb3d393e8c5ceaafe8
 
 name:           hal
 version:        0.1.0.0
@@ -41,9 +41,9 @@ library
       src
   ghc-options: -Wall
   build-depends:
-      base >=4.7 && <5
+      base >=4.9 && <5
     , containers ==0.6.*
-    , my-transformers
+    , my-monads
   default-language: Haskell2010
 
 executable hal
@@ -54,10 +54,10 @@ executable hal
       app
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.7 && <5
+      base >=4.9 && <5
     , containers ==0.6.*
     , hal
-    , my-transformers
+    , my-monads
   default-language: Haskell2010
 
 test-suite hal-test
@@ -70,8 +70,8 @@ test-suite hal-test
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
-    , base >=4.7 && <5
+    , base >=4.9 && <5
     , containers ==0.6.*
     , hal
-    , my-transformers
+    , my-monads
   default-language: Haskell2010

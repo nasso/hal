@@ -13,7 +13,7 @@ where
 
 import Control.Applicative
 import Control.Monad
-import Control.Monad.MyTrans.ParserT
+import Control.Monad.Trans.Parser
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Datum (Constant (..), Datum (..))

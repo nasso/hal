@@ -2,18 +2,18 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Control.Monad.MyTrans.ContT
-  ( module Control.Monad.MyTrans.Cont,
+module Control.Monad.Trans.Cont
+  ( module Control.Monad.Cont.Class,
     ContT (..),
     evalContT,
   )
 where
 
-import Control.Monad.MyTrans.Class (MonadTrans (..))
-import Control.Monad.MyTrans.Cont
-import Control.Monad.MyTrans.IO
-import Control.Monad.MyTrans.Reader
-import Control.Monad.MyTrans.State
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Cont.Class
+import Control.Monad.IO.Class
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
 
 -- | A monad transformer that adds continuation passing to another monad.
 newtype ContT r m a = ContT {runContT :: (a -> m r) -> m r}

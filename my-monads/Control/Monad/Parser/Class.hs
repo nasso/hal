@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
-module Control.Monad.MyTrans.Parser
+module Control.Monad.Parser.Class
   ( MonadParser (..),
     match,
     sepBy,

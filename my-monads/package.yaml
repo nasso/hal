@@ -1,6 +1,6 @@
-name: my-transformers
+name: my-monads
 version: 0.1.0.0
-github: "nasso/my-transformers"
+github: "nasso/my-monads"
 license: BSD3
 author: "nasso"
 maintainer: "example@example.com"
@@ -17,7 +17,7 @@ description:
   <https://github.com/nasso/my-transformers#readme>
 
 dependencies:
-  - base >= 4.7 && < 5
+  - base >= 4.9 && < 5
 
 library:
   source-dirs: .

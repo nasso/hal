@@ -14,7 +14,7 @@ where
 
 import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Control.Monad
-import Control.Monad.MyTrans.ParserT
+import Control.Monad.Trans.Parser
 import Data.Char
   ( GeneralCategory (..),
     chr,
