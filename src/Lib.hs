@@ -39,7 +39,7 @@ parseList p s = case runIdentity $ runParserT (p <* eof) $ ListStream s 0 of
   Parsed v _ _ -> return v
 
 parseAst :: Program.Parser a -> String -> Eval (Either LineParseError a)
-parseAst p s = handleParse $ parseLines (many datum <* eof) s
+parseAst p s = handleParse $ parseLines (some datum <* eof) s
   where
     handleParse (Left e) = pure $ Left e
     handleParse (Right ds) = do
