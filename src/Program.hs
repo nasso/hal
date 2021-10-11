@@ -11,11 +11,12 @@ module Program
   )
 where
 
-import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans.Parser
+import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Stream (ListStream (..))
 import Datum (Constant (..), Datum (..))
 
 type Var = String
@@ -39,7 +40,10 @@ data Formals
   | Variadic [Var] Var
   deriving (Eq, Show)
 
-type Parser a = ParserT [Datum] Maybe a
+type Parser a = ParserT (ListStream Datum) Identity a
+
+exec' :: [Datum] -> Parser a -> Parser (a, ListStream Datum)
+exec' l = exec (ListStream l 0)
 
 constant :: Parser Constant
 constant = do
@@ -58,15 +62,15 @@ sym = like . Lexeme . Sym
 properP :: Parser a -> Parser a
 properP p = do
   List l <- item
-  fst <$> exec l (p <* eof)
+  fst <$> exec' l (p <* eof)
 
 -- | Parse an improper list, run one parser on its elements and another on its
 -- tail.
 improperP :: Parser a -> Parser b -> Parser (a, b)
 improperP pa pb = do
   ImproperList l l' <- item
-  a <- fst <$> exec (NonEmpty.toList l) (pa <* eof)
-  b <- fst <$> exec [Lexeme l'] (pb <* eof)
+  a <- fst <$> exec' (NonEmpty.toList l) (pa <* eof)
+  b <- fst <$> exec' [Lexeme l'] (pb <* eof)
   return (a, b)
 
 program :: Parser Program
@@ -90,8 +94,8 @@ expression =
   Lit <$> constant
     <|> properP
       ( Quote <$> (sym "quote" *> item)
-          <|> Begin <$> (sym "begin" *> NonEmpty.some1 expression)
-          <|> Lambda <$> (sym "lambda" *> formals) <*> NonEmpty.some1 expression
+          <|> Begin <$> (sym "begin" *> some1 expression)
+          <|> Lambda <$> (sym "lambda" *> formals) <*> some1 expression
           <|> If <$> (sym "if" *> expression) <*> expression <*> expression
           <|> Set <$> (sym "set!" *> var) <*> expression
           <|> Application <$> expression <*> many expression

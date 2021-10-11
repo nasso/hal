@@ -13,7 +13,8 @@ import Control.Monad (MonadPlus)
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
-import Control.Monad.Parser.Class
+import Control.Monad.Parser.Class hiding ((<|>))
+import qualified Control.Monad.Parser.Class as PC ((<|>))
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -63,9 +64,13 @@ instance MonadExcept e m => MonadExcept e (ReaderT r m) where
     runReaderT m r `catchError` \e -> runReaderT (f e) r
 
 instance MonadParser p m => MonadParser p (ReaderT r m) where
+  getInput = lift getInput
+  setInput = lift . setInput
+  noParse = lift noParse
   item = lift item
-  eof = lift eof
-  exec ts e = ReaderT $ exec ts . runReaderT e
+  notFollowedBy p = ReaderT $ notFollowedBy . runReaderT p
+  a <|> b = ReaderT $ \r -> runReaderT a r PC.<|> runReaderT b r
+  p <?> n = ReaderT $ \r -> runReaderT p r <?> n
 
 instance MonadCont m => MonadCont (ReaderT r m) where
   callCC f =
