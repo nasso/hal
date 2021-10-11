@@ -16,7 +16,7 @@ import qualified Data.Map.Strict as Map
 import Data.Ratio (denominator, numerator)
 import Expand
 import Number
-import Program (Var)
+import Syntax (Var)
 import TreeWalker
 
 baseProcedures :: [(Var, Value)]

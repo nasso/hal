@@ -1,23 +1,22 @@
-module Program
+module Syntax
   ( Program (..),
     Form (..),
     Expression (..),
-    Constant (..),
     Formals (..),
     Var,
-    Parser,
-    program,
-    form,
+    AstReader,
+    readProgram,
   )
 where
 
-import Control.Monad
+import Control.Monad (join)
 import Control.Monad.Trans.Parser
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Stream (ListStream (..))
-import Datum (Constant (..), Datum (..))
+import Data.Stream (ListStream (ListStream))
+import Datum (Datum)
+import qualified Datum
 
 type Var = String
 
@@ -26,7 +25,7 @@ newtype Program = Program [Form] deriving (Eq, Show)
 data Form = Def [(Var, Expression)] | Expr Expression deriving (Eq, Show)
 
 data Expression
-  = Lit Constant
+  = Lit Datum.Constant
   | Quote Datum
   | Begin (NonEmpty Expression)
   | Lambda Formals (NonEmpty Expression)
@@ -40,46 +39,46 @@ data Formals
   | Variadic [Var] Var
   deriving (Eq, Show)
 
-type Parser a = ParserT (ListStream Datum) Identity a
+type AstReader a = ParserT (ListStream Datum) Identity a
 
-exec' :: [Datum] -> Parser a -> Parser (a, ListStream Datum)
+exec' :: [Datum] -> AstReader a -> AstReader (a, ListStream Datum)
 exec' l = exec (ListStream l 0)
 
-constant :: Parser Constant
+constant :: AstReader Datum.Constant
 constant = do
-  Lexeme c <- item
+  Datum.Lexeme c <- item
   return c
 
-var :: Parser Var
+var :: AstReader Var
 var = do
-  Sym s <- constant
+  Datum.Sym s <- constant
   return s
 
-sym :: String -> Parser Datum
-sym = like . Lexeme . Sym
+sym :: String -> AstReader Datum
+sym = like . Datum.Lexeme . Datum.Sym
 
 -- | Parse a proper list, and run a parser on its elements.
-properP :: Parser a -> Parser a
+properP :: AstReader a -> AstReader a
 properP p = do
-  List l <- item
+  Datum.List l <- item
   fst <$> exec' l (p <* eof)
 
 -- | Parse an improper list, run one parser on its elements and another on its
 -- tail.
-improperP :: Parser a -> Parser b -> Parser (a, b)
+improperP :: AstReader a -> AstReader b -> AstReader (a, b)
 improperP pa pb = do
-  ImproperList l l' <- item
+  Datum.ImproperList l l' <- item
   a <- fst <$> exec' (NonEmpty.toList l) (pa <* eof)
-  b <- fst <$> exec' [Lexeme l'] (pb <* eof)
+  b <- fst <$> exec' [Datum.Lexeme l'] (pb <* eof)
   return (a, b)
 
-program :: Parser Program
-program = Program <$> many form
+readProgram :: AstReader Program
+readProgram = Program <$> many form
 
-form :: Parser Form
+form :: AstReader Form
 form = Def <$> definition <|> Expr <$> expression
 
-definition :: Parser [(Var, Expression)]
+definition :: AstReader [(Var, Expression)]
 definition =
   join
     <$> some
@@ -89,7 +88,7 @@ definition =
           )
       )
 
-expression :: Parser Expression
+expression :: AstReader Expression
 expression =
   Lit <$> constant
     <|> properP
@@ -101,7 +100,7 @@ expression =
           <|> Application <$> expression <*> many expression
       )
 
-formals :: Parser Formals
+formals :: AstReader Formals
 formals =
   Variadic [] <$> var
     <|> Strict <$> properP (many var)
