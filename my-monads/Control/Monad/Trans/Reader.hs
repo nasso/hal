@@ -69,6 +69,7 @@ instance MonadParser p m => MonadParser p (ReaderT r m) where
   noParse = lift noParse
   item = lift item
   notFollowedBy p = ReaderT $ notFollowedBy . runReaderT p
+  followedBy p = ReaderT $ followedBy . runReaderT p
   try p = ReaderT $ try . runReaderT p
   a <|> b = ReaderT $ \r -> runReaderT a r PC.<|> runReaderT b r
   p <?> n = ReaderT $ \r -> runReaderT p r <?> n

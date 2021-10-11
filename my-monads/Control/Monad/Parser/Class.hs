@@ -28,8 +28,13 @@ class Monad m => MonadParser s m | m -> s where
   -- | Parse the next item.
   item :: m (Item s)
 
-  -- | A parser that only succeeds if the given parser fails.
+  -- | A parser that only succeeds if the given parser fails. Never consumes
+  -- any input.
   notFollowedBy :: m a -> m ()
+
+  -- | A parser that only succeeds if the given parser succeeds, but without
+  -- consuming any input.
+  followedBy :: m a -> m ()
 
   -- | Attempt to run the given parser, but backtrack if it fails.
   try :: m a -> m a
@@ -63,6 +68,10 @@ match = satisfy item
 -- | Make a parser optional.
 optional :: MonadParser s m => m a -> m (Maybe a)
 optional p = Just <$> p <|> pure Nothing
+
+-- | Try a series of parsers in order, returning the first one that succeeds.
+choice :: MonadParser s m => [m a] -> m a
+choice = foldr (<|>) noParse
 
 -- | Try to run the given parser as many times as possible.
 many :: MonadParser s m => m a -> m [a]
