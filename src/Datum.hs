@@ -36,20 +36,14 @@ type Parser a = ParserT LineStream Identity a
 
 -- | Parse a continuous sequence of items not containing the given string.
 commentText :: Parser ()
-commentText =
-  many (noneOf "#|")
-    >> ( do
-           i <- item
-           unlike (if i == '#' then '|' else '#') >> commentText
-       )
-    <|> pure ()
+commentText = void $ many $ notFollowedBy (string "#|" <|> string "|#") >> item
 
 -- | Make a parser consume any trailing whitespace.
 lexeme :: Parser a -> Parser a
 lexeme p = many atmosphere *> p <* many atmosphere
   where
     atmosphere = void (match isSpace) <|> comment
-    comment = lineComment <|> nestedComment <|> datumComment
+    comment = lineComment <|> nestedComment <|> datumComment <?> "comment"
     lineComment = like ';' >> many (match (/= '\n')) >> like '\n' $> ()
     nestedComment = string "#|" *> commentText <* commentCont <* string "|#"
     commentCont = many (nestedComment *> commentText)
@@ -57,7 +51,7 @@ lexeme p = many atmosphere *> p <* many atmosphere
 
 -- | Parse exactly the given string and discard any trailing whitespace.
 symbol :: String -> Parser String
-symbol = lexeme . string
+symbol s = lexeme (string s) <?> "\"" ++ s ++ "\""
 
 -- | Parse a value wrapped in parentheses or square brackets.
 paren :: Parser a -> Parser a
@@ -115,16 +109,15 @@ instance Show Datum where
       ++ ")"
 
 datum :: Parser Datum
-datum =
-  Lexeme
-    <$> lexeme
-      ( Bool <$> dBool
-          <|> Number <$> dNumber
-          <|> Char <$> dChar
-          <|> String <$> dString
-          <|> Sym <$> dSym
-      )
-    <|> dList
+datum = Lexeme <$> lexeme literal <|> dList
+  where
+    literal =
+      Bool <$> dBool
+        <|> Number <$> dNumber
+        <|> Char <$> dChar
+        <|> String <$> dString
+        <|> Sym <$> dSym
+        <?> "literal"
 
 dBool :: Parser Bool
 dBool = string "#t" $> True <|> string "#f" $> False
@@ -150,7 +143,7 @@ inlineHexEscape = do
   code <- string "\\x" *> many (digit 16) <* string ";"
   case readHex code of
     [(c, [])] -> return $ chr c
-    _ -> expected "hexadecimal character"
+    _ -> expected "hexadecimal value"
 
 isConstituent :: Char -> Bool
 isConstituent c | isAlpha c = True
@@ -206,6 +199,7 @@ escapeSequence =
     <|> string "\\v" $> '\v'
     <|> string "\\\"" $> '"'
     <|> string "\\\\" $> '\\'
+    <?> "escape sequence"
 
 escapeNewline :: Parser String
 escapeNewline =
@@ -351,7 +345,7 @@ dList =
             makeImproper (d :| ds') <$> (like '.' >> datum)
               <|> return (List ds)
     )
-    <|> abbreviation
+    <|> abbreviation <?> "list"
 
 abbreviation :: Parser Datum
 abbreviation = do

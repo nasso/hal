@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
 
 module Data.Stream
@@ -12,7 +13,7 @@ where
 import Data.Data (Proxy (..))
 import Data.Kind (Type)
 
-class Stream s where
+class Ord (Pos s) => Stream s where
   type Item s :: Type
   type Chunk s :: Type
   type Pos s :: Type

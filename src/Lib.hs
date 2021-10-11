@@ -24,12 +24,12 @@ import TreeWalker
 parseLines :: ParserT LineStream Identity a -> String -> Eval a
 parseLines p s = case runIdentity $ runParserT (p <* eof) $ makeLineStream s of
   NoParse e -> throwError $ show e
-  Parsed v _ -> return v
+  Parsed v _ _ -> return v
 
 parseList :: ParserT (ListStream i) Identity a -> [i] -> Eval a
 parseList p s = case runIdentity $ runParserT (p <* eof) $ ListStream s 0 of
   NoParse e -> throwError $ show e
-  Parsed v _ -> return v
+  Parsed v _ _ -> return v
 
 parseAst :: Program.Parser a -> String -> Eval a
 parseAst p s = do
