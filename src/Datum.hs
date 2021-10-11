@@ -44,10 +44,10 @@ lexeme p = many atmosphere *> p <* many atmosphere
   where
     atmosphere = void (match isSpace) <|> comment
     comment = lineComment <|> nestedComment <|> datumComment <?> "comment"
-    lineComment = like ';' >> many (match (/= '\n')) >> like '\n' $> ()
+    lineComment = void $ like ';' >> many (match (/= '\n')) >> like '\n'
     nestedComment = string "#|" *> commentText <* commentCont <* string "|#"
     commentCont = many (nestedComment *> commentText)
-    datumComment = string "#;" >> many atmosphere >> datum $> ()
+    datumComment = void $ string "#;" >> many atmosphere >> datum
 
 -- | Parse exactly the given string and discard any trailing whitespace.
 symbol :: String -> Parser String
@@ -120,10 +120,10 @@ datum = Lexeme <$> lexeme literal <|> dList
         <?> "literal"
 
 dBool :: Parser Bool
-dBool = string "#t" $> True <|> string "#f" $> False
+dBool = string "#t" $> True <|> string "#f" $> False <?> "boolean literal"
 
 dChar :: Parser Char
-dChar = string "#\\" >> (characterName <|> item)
+dChar = string "#\\" >> (characterName <|> item) <?> "character literal"
 
 characterName :: Parser Char
 characterName =
@@ -176,13 +176,14 @@ dSym =
     <|> symbol "+"
     <|> symbol "-"
     <|> symbol "..."
+    <?> "symbol"
   where
     initial = constituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHexEscape
     subsequent = initial <|> digit 10 <|> oneOf ".+-@"
     constituent = match isConstituent
 
 dString :: Parser String
-dString = like '"' *> many strElem <* like '"'
+dString = like '"' *> many strElem <* like '"' <?> "string literal"
   where
     strElem =
       (noneOf "\"\\" <|> escapeSequence <|> inlineHexEscape)
@@ -201,20 +202,21 @@ escapeSequence =
     <|> string "\\\\" $> '\\'
     <?> "escape sequence"
 
-escapeNewline :: Parser String
+escapeNewline :: Parser ()
 escapeNewline =
   like '\\'
     *> many intralineWhitespace
     *> lineEnding <* many intralineWhitespace
 
-lineEnding :: Parser String
+lineEnding :: Parser ()
 lineEnding =
-  string "\n" -- newline
-    <|> string "\x0085" -- next-line
-    <|> string "\x2028" -- line-separator
-    <|> string "\r\n" -- carriage-return newline
-    <|> string "\r\x0085" -- carriage-return next-line
-    <|> string "\r" -- carriage-return
+  void $
+    string "\n" -- newline
+      <|> string "\x0085" -- next-line
+      <|> string "\x2028" -- line-separator
+      <|> string "\r\n" -- carriage-return newline
+      <|> string "\r\x0085" -- carriage-return next-line
+      <|> string "\r" -- carriage-return
 
 intralineWhitespace :: Parser Char
 intralineWhitespace = match ((==) Space . generalCategory)
@@ -223,7 +225,7 @@ data Exactness = Exact | Inexact | Unspecified deriving (Eq, Show)
 
 -- | Parser for any Scheme number literal.
 dNumber :: Parser Number
-dNumber = num 10 <|> num 16 <|> num 2 <|> num 8
+dNumber = num 10 <|> num 16 <|> num 2 <|> num 8 <?> "number literal"
   where
     num r = prefix r >>= complex r
     prefix r = radix r *> exactness <|> exactness <* radix r
@@ -327,10 +329,10 @@ radix 16 = void $ like '#' >> oneOf "xX"
 radix r = error $ "unsupported radix: " ++ show r
 
 digit :: Int -> Parser Char
-digit 2 = oneOf "01"
-digit 8 = oneOf "01234567"
-digit 10 = match isDigit
-digit 16 = match isDigit <|> oneOf "abcdefABCDEF"
+digit 2 = oneOf "01" <?> "binary digit"
+digit 8 = oneOf "01234567" <?> "octal digit"
+digit 10 = match isDigit <?> "decimal digit"
+digit 16 = match isDigit <|> oneOf "abcdefABCDEF" <?> "hexadecimal digit"
 digit r = error $ "unsupported radix: " ++ show r
 
 -- | Parser for Scheme lists (both proper and improper).
@@ -345,7 +347,8 @@ dList =
             makeImproper (d :| ds') <$> (like '.' >> datum)
               <|> return (List ds)
     )
-    <|> abbreviation <?> "list"
+    <|> abbreviation
+    <?> "list"
 
 abbreviation :: Parser Datum
 abbreviation = do
@@ -355,14 +358,14 @@ abbreviation = do
 
 abbrevPrefix :: Parser String
 abbrevPrefix =
-  string "'" $> "quote"
-    <|> string "`" $> "quasiquote"
-    <|> string "," $> "unquote"
-    <|> string ",@" $> "unquote-splicing"
-    <|> string "#'" $> "syntax"
-    <|> string "#`" $> "quasisyntax"
-    <|> string "#," $> "unsyntax"
-    <|> string "#,@" $> "unsyntax-splicing"
+  symbol "'" $> "quote"
+    <|> symbol "`" $> "quasiquote"
+    <|> symbol "," $> "unquote"
+    <|> symbol ",@" $> "unquote-splicing"
+    <|> symbol "#'" $> "syntax"
+    <|> symbol "#`" $> "quasisyntax"
+    <|> symbol "#," $> "unsyntax"
+    <|> symbol "#,@" $> "unsyntax-splicing"
 
 makeImproper :: NonEmpty Datum -> Datum -> Datum
 makeImproper ds (Lexeme c) = ImproperList ds c

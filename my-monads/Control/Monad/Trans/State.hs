@@ -73,6 +73,7 @@ instance MonadParser p m => MonadParser p (StateT s m) where
   item = lift item
   notFollowedBy p = StateT $ \s ->
     notFollowedBy (fst <$> runStateT p s) >> return ((), s)
+  try p = StateT $ try . runStateT p
   a <|> b = StateT $ \s -> runStateT a s PC.<|> runStateT b s
   p <?> n = StateT $ \s -> runStateT p s <?> n
 

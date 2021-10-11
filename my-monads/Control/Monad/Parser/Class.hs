@@ -31,6 +31,9 @@ class Monad m => MonadParser s m | m -> s where
   -- | A parser that only succeeds if the given parser fails.
   notFollowedBy :: m a -> m ()
 
+  -- | Attempt to run the given parser, but backtrack if it fails.
+  try :: m a -> m a
+
   -- | Attempt to parse @p@, if it fails, try @q@.
   (<|>) :: m a -> m a -> m a
 
@@ -47,7 +50,11 @@ expected s = noParse <?> s
 
 -- | Succeeds only if the value parsed by the parser satisfies the predicate.
 satisfy :: MonadParser s m => m a -> (a -> Bool) -> m a
-satisfy p f = p >>= \i -> if f i then pure i else noParse
+satisfy p f = try $ do
+  i <- p
+  if f i
+    then return i
+    else noParse
 
 -- | Parse a single item satisfying the given predicate.
 match :: MonadParser s m => (Item s -> Bool) -> m (Item s)

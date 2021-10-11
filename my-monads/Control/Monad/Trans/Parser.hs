@@ -20,12 +20,18 @@ import Control.Monad.Parser.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Data.List (intercalate, union)
+import Data.List (union)
 import Data.Stream (Stream (..))
 
 data ErrorDesc = Expected String | Note String deriving (Eq)
 
 data ParseError p = ParseError p [ErrorDesc]
+
+makeOrList :: [String] -> String
+makeOrList [] = ""
+makeOrList [x] = x
+makeOrList [a, b] = a ++ ", or " ++ b
+makeOrList (x : xs) = x ++ ", " ++ makeOrList xs
 
 instance Show p => Show (ParseError p) where
   show (ParseError p d) =
@@ -34,12 +40,14 @@ instance Show p => Show (ParseError p) where
       expects = [e | Expected e <- d]
       notes = [n | Note n <- d]
       showExpects [] = ""
-      showExpects es = "expected " ++ intercalate ", " es ++ "\n"
+      showExpects es = "expected " ++ makeOrList es ++ "\n"
       showNotes [] = ""
       showNotes (n : ns) = "note: " ++ n ++ "\n" ++ showNotes ns
 
 joinErrors :: Ord p => ParseError p -> ParseError p -> ParseError p
 joinErrors e1@(ParseError p1 d1) e2@(ParseError p2 d2)
+  | null d1 && not (null d2) = e2
+  | null d2 && not (null d1) = e1
   | p1 > p2 = e1
   | p1 < p2 = e2
   | otherwise = ParseError p1 (d1 `union` d2)
@@ -103,6 +111,12 @@ instance (Monad m, Stream s) => MonadParser s (ParserT s m) where
     pure $ case r of
       NoParse _ -> Parsed () s $ emptyError s
       _ -> NoParse $ emptyError s
+
+  try p = ParserT $ \s -> do
+    r <- runParserT p s
+    pure $ case r of
+      NoParse _ -> NoParse $ emptyError s
+      _ -> r
 
   p <|> q = ParserT $ \s -> runParserT p s >>= first s
     where
