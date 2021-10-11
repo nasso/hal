@@ -71,8 +71,10 @@ instance MonadParser p m => MonadParser p (StateT s m) where
   setInput = lift . setInput
   noParse = lift noParse
   item = lift item
-  notFollowedBy p = StateT $ \s ->
-    notFollowedBy (fst <$> runStateT p s) >> return ((), s)
+  notFollowedBy p =
+    StateT $ \s -> notFollowedBy (fst <$> runStateT p s) >> return ((), s)
+  followedBy p =
+    StateT $ \s -> followedBy (fst <$> runStateT p s) >> return ((), s)
   try p = StateT $ try . runStateT p
   a <|> b = StateT $ \s -> runStateT a s PC.<|> runStateT b s
   p <?> n = StateT $ \s -> runStateT p s <?> n

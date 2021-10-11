@@ -38,11 +38,15 @@ type Parser a = ParserT LineStream Identity a
 commentText :: Parser ()
 commentText = void $ many $ notFollowedBy (string "#|" <|> string "|#") >> item
 
+-- | Whitespace as defined by the R6RS standard.
+whitespace :: Parser ()
+whitespace = void $ match isSpace <?> "whitespace"
+
 -- | Make a parser consume any trailing whitespace.
 lexeme :: Parser a -> Parser a
 lexeme p = many atmosphere *> p <* many atmosphere
   where
-    atmosphere = void (match isSpace) <|> comment
+    atmosphere = whitespace <|> comment
     comment = lineComment <|> nestedComment <|> datumComment <?> "comment"
     lineComment = void $ like ';' >> many (match (/= '\n')) >> like '\n'
     nestedComment = string "#|" *> commentText <* commentCont <* string "|#"
@@ -56,6 +60,14 @@ symbol s = lexeme (string s) <?> "\"" ++ s ++ "\""
 -- | Parse a value wrapped in parentheses or square brackets.
 paren :: Parser a -> Parser a
 paren p = symbol "(" *> p <* symbol ")" <|> symbol "[" *> p <* symbol "]"
+
+-- | A delimiter for identifiers, ., numbers, characters and booleans.
+delimiter :: Parser ()
+delimiter = void (oneOf "()[]\";#") <|> whitespace
+
+-- | The '.' symbol.
+dot :: Parser ()
+dot = like '.' >> followedBy (delimiter <|> eof)
 
 -- | Represents any simple constant Scheme value.
 data Constant
@@ -120,10 +132,16 @@ datum = Lexeme <$> lexeme literal <|> dList
         <?> "literal"
 
 dBool :: Parser Bool
-dBool = string "#t" $> True <|> string "#f" $> False <?> "boolean literal"
+dBool =
+  string "#t" $> True <|> string "#f" $> False
+    <* followedBy (delimiter <|> eof)
+    <?> "boolean literal"
 
 dChar :: Parser Char
-dChar = string "#\\" >> (characterName <|> item) <?> "character literal"
+dChar =
+  string "#\\" >> (characterName <|> item)
+    <* followedBy (delimiter <|> eof)
+    <?> "character literal"
 
 characterName :: Parser Char
 characterName =
@@ -171,16 +189,16 @@ isConstituentCategory _ = False
 
 dSym :: Parser String
 dSym =
-  (:) <$> initial <*> many subsequent
-    <|> ((++) <$> string "->" <*> many subsequent)
-    <|> symbol "+"
-    <|> symbol "-"
-    <|> symbol "..."
-    <?> "symbol"
-  where
-    initial = constituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHexEscape
-    subsequent = initial <|> digit 10 <|> oneOf ".+-@"
-    constituent = match isConstituent
+  let init' = match isConstituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHexEscape
+      subsequent = init' <|> digit 10 <|> oneOf ".+-@"
+   in ( (:) <$> init' <*> many subsequent
+          <|> ((++) <$> string "->" <*> many subsequent)
+          <|> string "+"
+          <|> string "-"
+          <|> string "..."
+      )
+        <* followedBy (delimiter <|> eof)
+        <?> "identifier"
 
 dString :: Parser String
 dString = like '"' *> many strElem <* like '"' <?> "string literal"
@@ -225,7 +243,9 @@ data Exactness = Exact | Inexact | Unspecified deriving (Eq, Show)
 
 -- | Parser for any Scheme number literal.
 dNumber :: Parser Number
-dNumber = num 10 <|> num 16 <|> num 2 <|> num 8 <?> "number literal"
+dNumber =
+  choice [num 10, num 16, num 2, num 8] <* followedBy (delimiter <|> eof)
+    <?> "number literal"
   where
     num r = prefix r >>= complex r
     prefix r = radix r *> exactness <|> exactness <* radix r
@@ -344,7 +364,7 @@ dList =
         case ds of
           [] -> return $ List []
           (d : ds') ->
-            makeImproper (d :| ds') <$> (like '.' >> datum)
+            makeImproper (d :| ds') <$> (dot >> datum)
               <|> return (List ds)
     )
     <|> abbreviation

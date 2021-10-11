@@ -106,11 +106,16 @@ instance (Monad m, Stream s) => MonadParser s (ParserT s m) where
         Nothing -> NoParse $ emptyError s
         Just (x, s') -> Parsed x s' $ emptyError s'
 
-  notFollowedBy p = ParserT $ \s -> do
+  notFollowedBy p = ParserT $ \s -> go s <$> runParserT p s
+    where
+      go s (NoParse _) = Parsed () s $ emptyError s
+      go s _ = NoParse $ emptyError s
+
+  followedBy p = ParserT $ \s -> do
     r <- runParserT p s
     pure $ case r of
-      NoParse _ -> Parsed () s $ emptyError s
-      _ -> NoParse $ emptyError s
+      (NoParse e) -> NoParse e
+      _ -> Parsed () s $ emptyError s
 
   try p = ParserT $ \s -> do
     r <- runParserT p s
