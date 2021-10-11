@@ -13,7 +13,6 @@ import Control.Monad (MonadPlus)
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
-import Control.Monad.Parser.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -62,15 +61,6 @@ instance MonadState s m => MonadState s (ExceptT e m) where
 instance MonadReader r m => MonadReader r (ExceptT e m) where
   ask = lift ask
   local f st = ExceptT $ local f (runExceptT st)
-
-instance MonadParser t m => MonadParser t (ExceptT e m) where
-  item = lift item
-  eof = lift eof
-  exec ts e = ExceptT $ do
-    v <- exec ts $ runExceptT e
-    case v of
-      (Left e', _) -> return $ Left e'
-      (Right a, ts') -> return $ Right (a, ts')
 
 instance MonadCont m => MonadCont (ExceptT e m) where
   callCC f =

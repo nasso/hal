@@ -15,7 +15,8 @@ import Control.Monad (MonadPlus)
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
-import Control.Monad.Parser.Class
+import Control.Monad.Parser.Class hiding ((<|>))
+import qualified Control.Monad.Parser.Class as PC
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class (MonadTrans (..))
@@ -66,11 +67,14 @@ instance MonadReader r m => MonadReader r (StateT s m) where
   local f st = StateT $ \s -> local f (runStateT st s)
 
 instance MonadParser p m => MonadParser p (StateT s m) where
+  getInput = lift getInput
+  setInput = lift . setInput
+  noParse = lift noParse
   item = lift item
-  eof = lift eof
-  exec ts e = StateT $ \s -> do
-    ((a, s'), p) <- exec ts (runStateT e s)
-    return ((a, p), s')
+  notFollowedBy p = StateT $ \s ->
+    notFollowedBy (fst <$> runStateT p s) >> return ((), s)
+  a <|> b = StateT $ \s -> runStateT a s PC.<|> runStateT b s
+  p <?> n = StateT $ \s -> runStateT p s <?> n
 
 -- | This implementation of callCC will retain the state of the StateT
 -- computation when the continuation is called.

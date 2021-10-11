@@ -12,7 +12,6 @@ module Datum
   )
 where
 
-import Control.Applicative (Alternative (many, (<|>)), empty, optional, some)
 import Control.Monad
 import Control.Monad.Trans.Parser
 import Data.Char
@@ -25,13 +24,15 @@ import Data.Char
     ord,
   )
 import Data.Functor (($>))
+import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
+import Data.Stream (LineStream)
 import Number
 import Numeric (readDec, readHex, readInt, readOct)
 
 -- | A parser from `String` to values of type `a`.
-type Parser a = ParserT String Maybe a
+type Parser a = ParserT LineStream Identity a
 
 -- | Parse a continuous sequence of items not containing the given string.
 commentText :: Parser ()
@@ -149,7 +150,7 @@ inlineHexEscape = do
   code <- string "\\x" *> many (digit 16) <* string ";"
   case readHex code of
     [(c, [])] -> return $ chr c
-    _ -> empty
+    _ -> expected "hexadecimal character"
 
 isConstituent :: Char -> Bool
 isConstituent c | isAlpha c = True
@@ -280,7 +281,7 @@ decimal 10 e =
       case ex of
         Nothing -> return i
         Just ex' -> return $ blur i * 10 ^^ ex'
-decimal _ _ = empty
+decimal r _ = error $ "decimal called with r = " ++ show r
 
 smallDecimal :: Parser Number
 smallDecimal = do
@@ -329,14 +330,14 @@ radix 2 = void $ like '#' >> oneOf "bB"
 radix 8 = void $ like '#' >> oneOf "oO"
 radix 10 = void $ optional (like '#' >> oneOf "dD")
 radix 16 = void $ like '#' >> oneOf "xX"
-radix _ = empty
+radix r = error $ "unsupported radix: " ++ show r
 
 digit :: Int -> Parser Char
 digit 2 = oneOf "01"
 digit 8 = oneOf "01234567"
 digit 10 = match isDigit
 digit 16 = match isDigit <|> oneOf "abcdefABCDEF"
-digit _ = empty
+digit r = error $ "unsupported radix: " ++ show r
 
 -- | Parser for Scheme lists (both proper and improper).
 dList :: Parser Datum
