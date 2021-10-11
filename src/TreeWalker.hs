@@ -10,7 +10,6 @@ module TreeWalker
     define,
     defineAll,
     emptyEnv,
-    evalForm,
     evalProgram,
     fetch,
     fetchAll,
@@ -37,13 +36,8 @@ import qualified Datum
 import Heap (Heap)
 import qualified Heap
 import Number
-import Program
-  ( Expression (..),
-    Form (..),
-    Formals (..),
-    Program (..),
-    Var,
-  )
+import Syntax (Expression, Form, Formals, Program, Var)
+import qualified Syntax
 
 -- | The environment maps symbols to values in the heap.
 type Env = Map Var Int
@@ -214,15 +208,16 @@ set :: Var -> Value -> Eval ()
 set n v = ref n >>= store v
 
 -- | Evaluates a program.
-evalProgram :: Program -> Eval () -> Eval ()
-evalProgram (Program []) e = e
-evalProgram (Program (f : fs)) e =
-  evalForm f $ const $ evalProgram (Program fs) e
+evalProgram :: Program -> ([Value] -> Eval ()) -> Eval ()
+evalProgram (Syntax.Program []) e = e []
+evalProgram (Syntax.Program [f]) e = evalForm f e
+evalProgram (Syntax.Program (f : fs)) e =
+  evalForm f $ const $ evalProgram (Syntax.Program fs) e
 
 -- | Evaluate a form and run @e@ in the new environment.
 evalForm :: Form -> ([Value] -> Eval ()) -> Eval ()
-evalForm (Expr expr) e = void $ evalExpr expr >>= e
-evalForm (Def def) e = evalDef def $ e []
+evalForm (Syntax.Expr expr) e = void $ evalExpr expr >>= e
+evalForm (Syntax.Def def) e = evalDef def $ e []
 
 -- | Evaluates a series of definition like @letrec*@, and run @ev@ in the new
 -- environment.
@@ -237,25 +232,26 @@ evalDef defs ev = do
 
 -- | Evaluates an expression.
 evalExpr :: Expression -> Eval [Value]
-evalExpr (Lit (Datum.Sym s)) = pure <$> deref s
-evalExpr (Lit c) = pure <$> pure $ valueFromDatum (Datum.Lexeme c)
-evalExpr (Quote d) = pure <$> pure $ valueFromDatum d
-evalExpr (Begin (e :| [])) = evalExpr e
-evalExpr (Begin (e :| e' : es)) = evalExpr e >> evalExpr (Begin (e' :| es))
-evalExpr (Lambda formals body) =
+evalExpr (Syntax.Lit (Datum.Sym s)) = pure <$> deref s
+evalExpr (Syntax.Lit c) = pure <$> pure $ valueFromDatum (Datum.Lexeme c)
+evalExpr (Syntax.Quote d) = pure <$> pure $ valueFromDatum d
+evalExpr (Syntax.Begin (e :| [])) = evalExpr e
+evalExpr (Syntax.Begin (e :| e' : es)) =
+  evalExpr e >> evalExpr (Syntax.Begin (e' :| es))
+evalExpr (Syntax.Lambda formals body) =
   pure <$> pure . Procedure . run =<< ask
   where
     run env args =
       local (const env) $ -- restore the captured environment
         bindFormals formals args $ -- bind arg values to formal params
           evalBody body -- evaluate the body
-evalExpr (Set var expr) = (single (evalExpr expr) >>= set var) $> []
-evalExpr (If cond then' else') =
+evalExpr (Syntax.Set var expr) = (single (evalExpr expr) >>= set var) $> []
+evalExpr (Syntax.If cond then' else') =
   single (evalExpr cond) >>= branch
   where
     branch (Bool False) = evalExpr else'
     branch _ = evalExpr then'
-evalExpr (Application funExpr argExprs) =
+evalExpr (Syntax.Application funExpr argExprs) =
   single (evalExpr funExpr) >>= applyProc
   where
     applyProc (Procedure proc') = evalArgs argExprs >>= allocAll >>= proc'
@@ -265,18 +261,18 @@ evalExpr (Application funExpr argExprs) =
 
 -- | Bind the formals of a lambda expression some addresses.
 bindFormals :: Formals -> [Int] -> Eval a -> Eval a
-bindFormals (Strict []) [] e = e
-bindFormals (Strict []) _ _ = throwError "too many arguments"
-bindFormals (Strict _) [] _ = throwError "not enough arguments"
-bindFormals (Strict (p : ps)) (a : as) e =
-  bind p a $ bindFormals (Strict ps) as e
-bindFormals (Variadic [] ps) as e = do
+bindFormals (Syntax.Strict []) [] e = e
+bindFormals (Syntax.Strict []) _ _ = throwError "too many arguments"
+bindFormals (Syntax.Strict _) [] _ = throwError "not enough arguments"
+bindFormals (Syntax.Strict (p : ps)) (a : as) e =
+  bind p a $ bindFormals (Syntax.Strict ps) as e
+bindFormals (Syntax.Variadic [] ps) as e = do
   avs <- fetchAll as
   define ps (foldr Pair Empty avs) e
-bindFormals (Variadic (p : ps) ps') (a : as) e = do
+bindFormals (Syntax.Variadic (p : ps) ps') (a : as) e = do
   av <- fetch a
-  define p av $ bindFormals (Variadic ps ps') as e
-bindFormals (Variadic _ _) [] _ = throwError "not enough arguments"
+  define p av $ bindFormals (Syntax.Variadic ps ps') as e
+bindFormals (Syntax.Variadic _ _) [] _ = throwError "not enough arguments"
 
 -- | Evaluates a body, that is, a sequence of expressions, and returns the value
 -- of the last expression.

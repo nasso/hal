@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b3b18371102589e074c1c024a27e715e1b5d1a1adbcc94cb3d393e8c5ceaafe8
+-- hash: b2ca9d28d6e28c564e4e023905b91a44c456bb88eff18afed0da44df017d340a
 
 name:           hal
 version:        0.1.0.0
@@ -33,7 +33,7 @@ library
       Heap
       Lib
       Number
-      Program
+      Syntax
       TreeWalker
   other-modules:
       Paths_hal

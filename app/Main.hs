@@ -66,14 +66,13 @@ repl = readForm
     contLine prev = (++) prev . (:) '\n' <$> liftIO (promptCont >> getLine)
     readForm prev = do
       line <- contLine prev
-      withFormStr' line (handleResult line) `catchError` displayError
+      withStr' line (printLoop line) `catchError` displayError
     displayError msg = liftIO (ePutStrLn msg) >> repl ""
 
-handleResult ::
-  String ->
-  Either (ParseError (Pos LineStream)) [Value] ->
-  Eval ()
-handleResult s (Left e@(ParseError p _))
+printLoop :: String -> StrEvalResult [Value] -> Eval ()
+printLoop _ (Right vs) = liftIO (displayAll vs) >> repl ""
+printLoop _ (Left (SyntaxError err)) = throwError err
+printLoop s (Left (CantParse e@(ParseError p _)))
   | p == eol = repl s
   | otherwise = throwError $ show e
   where
@@ -82,7 +81,6 @@ handleResult s (Left e@(ParseError p _))
     lastLineNum = length allLines - 1
     lastLineCol = length lastLine
     eol = LinePos lastLineNum lastLineCol lastLine
-handleResult _ (Right vs) = liftIO (displayAll vs) >> repl ""
 
 displayAll :: [Value] -> IO ()
 displayAll (Void : vs') = displayAll vs'
