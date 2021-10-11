@@ -1,9 +1,11 @@
 module Main where
 
 import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Except.Class
 import Control.Monad.Cont.Class
+import Control.Monad.Except.Class
+import Control.Monad.IO.Class
+import Control.Monad.Trans.Parser (ParseError (ParseError))
+import Data.Stream
 import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -55,23 +57,43 @@ vm files i =
   withBaseLib $
     withFiles files $
       when i $
-        callCC $ \exit -> define "exit" (Procedure $ const $ exit ()) repl
+        callCC $ \exit -> define "exit" (Procedure $ const $ exit ()) $ repl ""
 
-repl :: Eval ()
-repl = do
-  line <- liftIO $ prompt >> getLine
-  evalAndPrint line
-
-evalAndPrint :: String -> Eval ()
-evalAndPrint s = withFormStr s displayAndLoop `catchError` displayError
+repl :: String -> Eval ()
+repl = readForm
   where
-    displayAndLoop [] = repl
-    displayAndLoop (Void : vs) = displayAndLoop vs
-    displayAndLoop (v : vs) = liftIO (print v) >> displayAndLoop vs
-    displayError msg = liftIO (ePutStrLn msg) >> repl
+    contLine "" = liftIO $ prompt >> getLine
+    contLine prev = (++) prev . (:) '\n' <$> liftIO (promptCont >> getLine)
+    readForm prev = do
+      line <- contLine prev
+      withFormStr' line (handleResult line) `catchError` displayError
+    displayError msg = liftIO (ePutStrLn msg) >> repl ""
+
+handleResult ::
+  String ->
+  Either (ParseError (Pos LineStream)) [Value] ->
+  Eval ()
+handleResult s (Left e@(ParseError p _))
+  | p == eol = repl s
+  | otherwise = throwError $ show e
+  where
+    allLines = lines s
+    lastLine = last allLines
+    lastLineNum = length allLines - 1
+    lastLineCol = length lastLine
+    eol = LinePos lastLineNum lastLineCol lastLine
+handleResult _ (Right vs) = liftIO (displayAll vs) >> repl ""
+
+displayAll :: [Value] -> IO ()
+displayAll (Void : vs') = displayAll vs'
+displayAll (v : vs') = print v >> displayAll vs'
+displayAll [] = pure ()
 
 prompt :: IO ()
 prompt = putStr "> " >> hFlush stdout
+
+promptCont :: IO ()
+promptCont = putStr ".. " >> hFlush stdout
 
 ePutStr, ePutStrLn :: String -> IO ()
 ePutStr = hPutStr stderr
