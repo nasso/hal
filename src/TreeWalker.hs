@@ -35,7 +35,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Datum (Datum)
 import qualified Datum
-import Expand (ExpandCtx (..), PValue (Variable), emptyExpandCtx)
+import Expand (Binding (Variable), ExpandCtx (..), emptyExpandCtx)
 import Heap (Heap)
 import qualified Heap
 import Number
