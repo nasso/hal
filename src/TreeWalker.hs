@@ -35,7 +35,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Datum (Datum)
 import qualified Datum
-import Expand (Binding (Variable), ExpandCtx (..), emptyExpandCtx)
+import Expand (ExpandCtx, defaultExpandCtx, setVars)
 import Heap (Heap)
 import qualified Heap
 import Number
@@ -50,14 +50,11 @@ data Env = Env
 
 -- | An empty environment.
 emptyEnv :: Env
-emptyEnv = Env Map.empty emptyExpandCtx
+emptyEnv = Env Map.empty defaultExpandCtx
 
 -- | Get an up-to-date expansion context for the current environment.
 getExpandCtx :: Eval ExpandCtx
-getExpandCtx = do
-  varmap <- asks vars
-  ctx <- asks expandCtx
-  pure $ ctx {ctxEnv = Map.union (Map.map (const Variable) varmap) (ctxEnv ctx)}
+getExpandCtx = setVars <$> asks (Map.keys . vars) <*> asks expandCtx
 
 withExpandCtx :: ExpandCtx -> Eval a -> Eval a
 withExpandCtx ctx = local (\env -> env {expandCtx = ctx})

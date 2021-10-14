@@ -1,9 +1,10 @@
 module Expand
   ( Binding (..),
-    ExpandCtx (..),
-    emptyExpandCtx,
+    ExpandCtx,
+    defaultExpandCtx,
     runExpand,
     expandProgram,
+    setVars,
   )
 where
 
@@ -19,11 +20,15 @@ import Datum
 
 type Ident = String
 
-type Transformer = Datum -> Expand Datum
+type Transformer = Datum -> Expand (MaybeDeferred (NonEmpty Datum))
+
+data EValue
+  = EProc (Datum -> Expand EValue)
+  | Syntax Transformer
 
 data Binding
   = Variable
-  | Syntax Transformer
+  | EValue EValue
 
 data MaybeDeferred a
   = Deferred (Expand a)
@@ -57,8 +62,19 @@ newtype ExpandCtx = ExpandCtx
   { ctxEnv :: Map Ident Binding
   }
 
-emptyExpandCtx :: ExpandCtx
-emptyExpandCtx = ExpandCtx Map.empty
+defaultExpandCtx :: ExpandCtx
+defaultExpandCtx =
+  ExpandCtx $
+    Map.fromList
+      [ ("define", EValue $ Syntax defineForm),
+        ("begin", EValue $ Syntax beginForm),
+        ("lambda", EValue $ Syntax lambdaForm),
+        ("if", EValue $ Syntax ifForm),
+        ("quote", EValue $ Syntax quoteForm),
+        ("set!", EValue $ Syntax setForm),
+        ("define-syntax", EValue $ Syntax defineSyntaxForm),
+        ("syntax-rules", EValue $ EProc (fmap Syntax . syntaxRulesProc))
+      ]
 
 lookupIdent :: Ident -> ExpandCtx -> Maybe Binding
 lookupIdent ident = Map.lookup ident . ctxEnv
@@ -68,6 +84,20 @@ bindIdent ident v = ExpandCtx . Map.insert ident v . ctxEnv
 
 mergeEnv :: Map Ident Binding -> ExpandCtx -> ExpandCtx
 mergeEnv a = ExpandCtx . Map.union a . ctxEnv
+
+setVars :: [Ident] -> ExpandCtx -> ExpandCtx
+setVars [] ctx = ctx {ctxEnv = Map.filter notVar $ ctxEnv ctx}
+  where
+    notVar Variable = False
+    notVar _ = True
+setVars (v : vs) ctx = bindIdent v Variable (setVars vs ctx)
+
+getBinding :: Ident -> Expand Binding
+getBinding ident = do
+  v <- gets (lookupIdent ident)
+  case v of
+    Just v' -> pure v'
+    Nothing -> throwError $ "Unbound identifier: " ++ ident
 
 type Expand a = StateT ExpandCtx (ExceptT String Identity) a
 
@@ -87,25 +117,45 @@ expandProgram ds = do
   (NonEmpty.toList =<<) <$> sync eds
 
 expandForm :: Datum -> Expand (MaybeDeferred (NonEmpty Datum))
+-- (<keyword> <datum> ...)
 expandForm dat@(List (s@(Lexeme (Sym ident)) : ds)) = do
-  pv <- gets (lookupIdent ident)
-  e' <- case pv of
-    Just (Syntax t) -> Just . Expanded . (:| []) <$> t dat -- Syntax use
-    Just Variable -> Just . Expanded . (:| []) <$> expandApplication (s :| ds)
-    Nothing -> expandCoreForm dat -- unbound = core form
-  case e' of
-    Just e'' -> pure e''
-    Nothing -> throwError $ "Unbound symbol: " ++ ident
-expandForm dat@(Lexeme (Sym ident)) = do
-  pv <- gets (lookupIdent ident)
+  pv <- getBinding ident
+  -- might be a procedure application
   case pv of
-    Just (Syntax t) -> Expanded . (:| []) <$> t dat
-    Just Variable -> pure $ Expanded (dat :| [])
-    Nothing -> throwError $ "Unbound symbol: " ++ ident
-expandForm dat@(Lexeme _) = return $ Expanded (dat :| [])
+    EValue (Syntax syn) -> syn dat
+    Variable -> Expanded . (:| []) <$> expandApplication (s :| ds)
+    _ -> throwError $ "Invalid syntax: " ++ show dat
+
+-- (<keyword> <datum> ... . <datum>)
+expandForm dat@(ImproperList (Lexeme (Sym ident) :| _) _) = do
+  pv <- getBinding ident
+  -- could only be a syntactic form
+  case pv of
+    EValue (Syntax syn) -> syn dat
+    _ -> throwError $ "Invalid syntax: " ++ show dat
+
+-- <keyword>
+expandForm dat@(Lexeme (Sym ident)) = do
+  pv <- getBinding ident
+  -- might be a variable reference
+  case pv of
+    EValue (Syntax syn) -> syn dat
+    Variable -> pure $ Expanded (dat :| []) -- just a variable reference
+    _ -> throwError $ "Invalid syntax: " ++ show dat
+
+-- other lexemes are just passed through (e.g. numbers, strings)
+expandForm dat@(Lexeme _) = pure $ Expanded (dat :| [])
+-- any list might be a procedure application
 expandForm (List (ds : ds')) =
   Expanded . (:| []) <$> expandApplication (ds :| ds')
+-- everything else is a syntax error
 expandForm dat = throwError $ "Invalid syntax: " ++ show dat
+
+expandApplication :: NonEmpty Datum -> Expand Datum
+expandApplication (operator :| operands) = do
+  operator' <- expandExpr operator
+  operands' <- mapM expandExpr operands
+  pure $ List (operator' : operands')
 
 expandExpr :: Datum -> Expand Datum
 expandExpr d = do
@@ -139,53 +189,24 @@ isDefinition _ = pure False
 isExpression :: Datum -> Expand Bool
 isExpression = fmap not . isDefinition
 
-expandApplication :: NonEmpty Datum -> Expand Datum
-expandApplication (operator :| operands) = do
-  operator' <- expandExpr operator
-  operands' <- mapM expandExpr operands
-  pure $ List (operator' : operands')
-
-expandCoreForm :: Datum -> Expand (Maybe (MaybeDeferred (NonEmpty Datum)))
-expandCoreForm d@(List (Lexeme (Sym "define-syntax") : _)) =
-  Just . Expanded . (:| []) <$> expandDefineSyntax d
-expandCoreForm d@(List (Lexeme (Sym "define") : _)) =
-  Just . Deferred . fmap (:| []) <$> expandDefine d
-expandCoreForm d@(List (Lexeme (Sym "begin") : _)) = Just <$> expandBegin d
-expandCoreForm d@(List (Lexeme (Sym "lambda") : _)) =
-  Just . Expanded . (:| []) <$> expandLambda d
-expandCoreForm d@(List (Lexeme (Sym "if") : _)) =
-  Just . Expanded . (:| []) <$> expandIf d
-expandCoreForm d@(List (Lexeme (Sym "quote") : _)) =
-  Just . Expanded . (:| []) <$> expandQuote d
-expandCoreForm d@(List (Lexeme (Sym "set!") : _)) =
-  Just . Expanded . (:| []) <$> expandSet d
-expandCoreForm _ = return Nothing
-
-expandDefineSyntax :: Datum -> Expand Datum
-expandDefineSyntax (List [Lexeme (Sym "define-syntax"), Lexeme (Sym n), e]) = do
-  t <- Syntax <$> evalExpandExpr e
-  modify (bindIdent n t)
-  pure $ List [Lexeme (Sym "void")]
-expandDefineSyntax ds = throwError $ "Invalid syntax: " ++ show ds
-
-expandDefine :: Datum -> Expand (Expand Datum)
-expandDefine (List [Lexeme (Sym "define"), Lexeme (Sym n), e]) = do
+defineForm :: Transformer
+defineForm (List [_, Lexeme (Sym n), e]) = do
   modify (bindIdent n Variable)
-  return $ do
+  pure . Deferred $ do
     e' <- expandExpr e
-    pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e']
-expandDefine ds = throwError $ "Invalid syntax: " ++ show ds
+    pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e'] :| []
+defineForm ds = throwError $ "Invalid syntax: " ++ show ds
 
-expandBegin :: Datum -> Expand (MaybeDeferred (NonEmpty Datum))
-expandBegin (List (Lexeme (Sym "begin") : d : ds)) =
+beginForm :: Transformer
+beginForm (List (_ : d : ds)) =
   fmap join . sequence <$> mapM expandForm (d :| ds)
-expandBegin d = throwError $ "Invalid syntax: " ++ show d
+beginForm d = throwError $ "Invalid syntax: " ++ show d
 
-expandLambda :: Datum -> Expand Datum
-expandLambda (List (Lexeme (Sym "lambda") : formals : body)) = do
+lambdaForm :: Transformer
+lambdaForm (List (_ : formals : body)) = do
   body' <- withFormals formals (expandBody body)
-  pure $ List $ Lexeme (Sym "lambda") : formals : body'
-expandLambda ds = throwError $ "Invalid syntax: " ++ show ds
+  pure . Expanded $ List (Lexeme (Sym "lambda") : formals : body') :| []
+lambdaForm ds = throwError $ "Invalid syntax: " ++ show ds
 
 withFormals :: Datum -> Expand [Datum] -> Expand [Datum]
 withFormals formals e = do
@@ -213,41 +234,63 @@ checkFormals d = throwError $ "Invalid formal syntax: " ++ show d
 expandBody :: [Datum] -> Expand [Datum]
 expandBody [] = pure []
 expandBody (f : fs) = do
-  f' <- expandExpr f -- TODO: bodies can start with a series of definitions
+  -- TODO: bodies can start with a series of definitions
+  -- in that case, they must be replaced with the equivalent of a letrec* form
+  f' <- expandExpr f
   fs' <- expandBody fs
   pure $ f' : fs'
 
-expandIf :: Datum -> Expand Datum
-expandIf (List [Lexeme (Sym "if"), cond, then', else']) = do
+ifForm :: Transformer
+ifForm (List [_, cond, then', else']) = do
   cond' <- expandExpr cond
   then'' <- expandExpr then'
   else'' <- expandExpr else'
-  pure $ List [Lexeme (Sym "if"), cond', then'', else'']
-expandIf d = throwError $ "Invalid syntax: " ++ show d
+  pure . Expanded $ List [Lexeme (Sym "if"), cond', then'', else''] :| []
+ifForm d = throwError $ "Invalid syntax: " ++ show d
 
-expandQuote :: Datum -> Expand Datum
-expandQuote dat@(List [Lexeme (Sym "quote"), _]) = pure dat
-expandQuote d = throwError $ "Invalid syntax: " ++ show d
+quoteForm :: Transformer
+quoteForm dat@(List [Lexeme (Sym "quote"), _]) = pure . Expanded $ dat :| []
+quoteForm d = throwError $ "Invalid syntax: " ++ show d
 
-expandSet :: Datum -> Expand Datum
-expandSet (List [Lexeme (Sym "set!"), Lexeme (Sym name), value]) = do
-  pv <- gets (lookupIdent name)
-  case pv of
-    Just Variable -> do
-      value' <- expandExpr value
-      pure $ List [Lexeme (Sym "set!"), Lexeme (Sym name), value']
-    _ -> throwError $ "Not a variable: " ++ name
-expandSet d = throwError $ "Invalid syntax: " ++ show d
+setForm :: Transformer
+setForm dat@(List [_, Lexeme (Sym name), v]) = do
+  binding <- getBinding name
+  case binding of
+    EValue (Syntax syn) -> syn dat -- (set! <keyword> <datum>) macro
+    Variable -> do
+      v' <- expandExpr v
+      pure . Expanded $ List [Lexeme (Sym "set!"), Lexeme (Sym name), v'] :| []
+    _ -> throwError $ "Invalid syntax: " ++ show dat
+setForm d = throwError $ "Invalid syntax: " ++ show d
 
-evalExpandExpr :: Datum -> Expand Transformer
-evalExpandExpr dat@(List (Lexeme (Sym "syntax-rules") : List lits : rules)) = do
+defineSyntaxForm :: Transformer
+defineSyntaxForm (List [Lexeme (Sym "define-syntax"), Lexeme (Sym n), e]) = do
+  -- TODO: expand e before evaluating it
+  e' <- evalExpandExpr e
+  case e' of
+    s@(Syntax _) -> do
+      modify (bindIdent n $ EValue s)
+      pure . Expanded $ List [Lexeme (Sym "void")] :| []
+    _ -> throwError $ "Invalid syntax: " ++ show e
+defineSyntaxForm ds = throwError $ "Invalid syntax: " ++ show ds
+
+evalExpandExpr :: Datum -> Expand EValue
+evalExpandExpr dat@(List (Lexeme (Sym ident) : _)) = do
+  binding <- getBinding ident
+  case binding of
+    EValue (EProc p) -> p dat
+    _ -> throwError $ "Invalid syntax: " ++ show dat
+evalExpandExpr d = throwError $ "Invalid syntax: " ++ show d
+
+syntaxRulesProc :: Datum -> Expand Transformer
+syntaxRulesProc dat@(List (_ : List lits : rules)) = do
   lits' <- mapM getSymbol lits
-  makeSyntaxRules lits' rules
+  makeSyntaxRulesTransformer lits' rules
   where
     getSymbol :: Datum -> Expand String
     getSymbol (Lexeme (Sym s)) = pure s
     getSymbol _ = throwError $ "Invalid syntax: " ++ show dat
-evalExpandExpr d = throwError $ "Invalid syntax: " ++ show d
+syntaxRulesProc d = throwError $ "Invalid syntax: " ++ show d
 
-makeSyntaxRules :: [String] -> [Datum] -> Expand Transformer
-makeSyntaxRules _ _ = throwError "syntax-rules unimplemented"
+makeSyntaxRulesTransformer :: [String] -> [Datum] -> Expand Transformer
+makeSyntaxRulesTransformer _ _ = throwError "syntax-rules unimplemented"
