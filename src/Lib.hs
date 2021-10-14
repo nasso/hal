@@ -13,10 +13,8 @@ import BaseLib.Procedure
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
 import Control.Monad.Parser.Class
-import Control.Monad.Reader.Class
 import Control.Monad.Trans.Parser
 import Data.Functor.Identity (Identity (runIdentity))
-import qualified Data.Map.Strict as Map
 import Data.Stream (LineStream, ListStream (ListStream), Stream (Pos), makeLineStream)
 import Datum (Datum, datum)
 import Expand
@@ -32,26 +30,27 @@ data StrEvalError
 
 type StrEvalResult a = Either StrEvalError a
 
-doExpand :: [Datum] -> Eval (StrEvalResult [Datum])
-doExpand tokens = do
-  ctx <- asks $ Map.map (const Variable)
+doExpand :: [Datum] -> (StrEvalResult [Datum] -> Eval r) -> Eval r
+doExpand tokens k = do
+  ctx <- getExpandCtx
   case runExpand (expandProgram tokens) ctx of
-    Left err -> pure $ Left $ SyntaxError err
-    Right (ast, _) -> pure $ Right ast
+    Left err -> k $ Left $ SyntaxError err
+    Right (ast, ctx') -> withExpandCtx ctx' $ k $ Right ast
 
-parseAst :: String -> Eval (StrEvalResult Program)
-parseAst s =
+parseAst :: String -> (StrEvalResult Program -> Eval r) -> Eval r
+parseAst s k =
   case runIdentity $ runParserT (many datum <* eof) $ makeLineStream s of
-    NoParse e -> pure $ Left $ CantParse e
-    Parsed v _ _ -> (>>= expand) <$> doExpand v
+    NoParse e -> k $ Left $ CantParse e
+    Parsed v _ _ -> doExpand v expand
   where
-    expand v =
+    expand (Left e) = k $ Left e
+    expand (Right v) =
       case runIdentity $ runParserT Syntax.readProgram (ListStream v 0) of
-        NoParse e -> Left $ SyntaxError $ show e
-        Parsed ast _ _ -> Right ast
+        NoParse e -> k $ Left $ SyntaxError $ show e
+        Parsed ast _ _ -> k $ Right ast
 
 withStr' :: String -> (StrEvalResult [Value] -> Eval ()) -> Eval ()
-withStr' s k = parseAst s >>= go
+withStr' s k = parseAst s go
   where
     go (Left e) = k $ Left e
     go (Right v) = evalProgram v (k . Right)

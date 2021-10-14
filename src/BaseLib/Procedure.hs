@@ -7,12 +7,10 @@ import Control.Monad
 import Control.Monad.Cont.Class
 import Control.Monad.Except.Class
 import Control.Monad.IO.Class
-import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Data.Fixed
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
-import qualified Data.Map.Strict as Map
 import Data.Ratio (denominator, numerator)
 import Expand
 import Number
@@ -339,7 +337,7 @@ builtinExpand [v] = do
   v' <- case datumFromValue v of
     Nothing -> throwError $ "Invalid syntax: " ++ show v
     Just v' -> pure v'
-  expandCtx <- asks $ Map.map (const Variable)
+  expandCtx <- getExpandCtx
   (ds, _) <- liftEither $ runExpand (expandProgram [v']) expandCtx
   return $ valueFromDatum <$> ds
 builtinExpand _ = throwError "expand: invalid arguments"
