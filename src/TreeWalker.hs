@@ -1,6 +1,8 @@
 module TreeWalker
   ( Eval,
     Value (..),
+    getExpandCtx,
+    withExpandCtx,
     valueFromDatum,
     datumFromValue,
     alloc,
@@ -33,6 +35,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Datum (Datum)
 import qualified Datum
+import Expand (ExpandCtx (..), PValue (Variable), emptyExpandCtx)
 import Heap (Heap)
 import qualified Heap
 import Number
@@ -40,11 +43,24 @@ import Syntax (Expression, Form, Formals, Program, Var)
 import qualified Syntax
 
 -- | The environment maps symbols to values in the heap.
-type Env = Map Var Int
+data Env = Env
+  { vars :: Map Var Int,
+    expandCtx :: ExpandCtx
+  }
 
 -- | An empty environment.
 emptyEnv :: Env
-emptyEnv = Map.empty
+emptyEnv = Env Map.empty emptyExpandCtx
+
+-- | Get an up-to-date expansion context for the current environment.
+getExpandCtx :: Eval ExpandCtx
+getExpandCtx = do
+  varmap <- asks vars
+  ctx <- asks expandCtx
+  pure $ ctx {ctxEnv = Map.union (Map.map (const Variable) varmap) (ctxEnv ctx)}
+
+withExpandCtx :: ExpandCtx -> Eval a -> Eval a
+withExpandCtx ctx = local (\env -> env {expandCtx = ctx})
 
 -- | Represents any value in the heap.
 data Value
@@ -124,14 +140,33 @@ datumFromValue (Pair car cdr) = do
       Datum.ImproperList (car' :| e : es) con
 datumFromValue (Procedure _) = Nothing
 
-type Eval a = ExceptT String (ReaderT Env (ContT () (StateT (Heap Value) IO))) a
+newtype EvalState = EvalState
+  { heap :: Heap Value
+  }
+  deriving (Show)
+
+emptyState :: EvalState
+emptyState = EvalState Heap.empty
+
+heapState :: (Heap Value -> (a, Heap Value)) -> Eval a
+heapState f = state go
+  where
+    go s = (v, s {heap = h}) where (v, h) = f (heap s)
+
+heapGets :: (Heap Value -> a) -> Eval a
+heapGets f = gets (f . heap)
+
+heapModify :: (Heap Value -> Heap Value) -> Eval ()
+heapModify f = modify $ \s -> s {heap = f (heap s)}
+
+type Eval a = ExceptT String (ReaderT Env (ContT () (StateT EvalState IO))) a
 
 runEval :: Eval a -> (Either String a -> IO ()) -> IO ()
 runEval e k =
   let r = runExceptT e
       c = runReaderT r emptyEnv
       s = runContT c (liftIO . k)
-   in fst <$> runStateT s Heap.empty
+   in fst <$> runStateT s emptyState
 
 -- | Throw an error if an evaluation returns more than one value.
 single :: Eval [Value] -> Eval Value
@@ -143,7 +178,7 @@ single e = do
 
 -- | Allocate a new value in the heap and return its address.
 alloc :: Value -> Eval Int
-alloc v = state (Heap.alloc v)
+alloc v = heapState (Heap.alloc v)
 
 -- | Allocate many values in the heap and return their addresses.
 allocAll :: [Value] -> Eval [Int]
@@ -155,7 +190,7 @@ allocAll (v : vs) = do
 
 -- | Run an evaluator with a symbol bound to the address of a heap value.
 bind :: Var -> Int -> Eval a -> Eval a
-bind s a = local (Map.insert s a)
+bind s a = local $ \e -> e {vars = Map.insert s a $ vars e}
 
 -- | Bind a list of pairs of symbols and addresses to the environment.
 bindAll :: [(Var, Int)] -> Eval a -> Eval a
@@ -174,7 +209,7 @@ defineAll ((n, v) : xs) = define n v . defineAll xs
 -- | Fetch a value from the heap.
 fetch :: Int -> Eval Value
 fetch a = do
-  v <- gets (Heap.fetch a)
+  v <- heapGets (Heap.fetch a)
   case v of
     Just v' -> return v'
     Nothing -> throwError "Segmentation fault."
@@ -189,12 +224,12 @@ fetchAll (a : as) = do
 
 -- | Assign a value to a heap address.
 store :: Value -> Int -> Eval ()
-store v a = modify (Heap.store a v)
+store v a = heapModify (Heap.store a v)
 
 -- | Get the address of a variable in the environment.
 ref :: Var -> Eval Int
 ref s = do
-  a <- asks (Map.lookup s)
+  a <- asks (Map.lookup s . vars)
   case a of
     Just a' -> return a'
     Nothing -> throwError $ "unbound variable: " ++ show s

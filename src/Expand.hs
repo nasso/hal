@@ -1,5 +1,7 @@
 module Expand
   ( PValue (..),
+    ExpandCtx (..),
+    emptyExpandCtx,
     runExpand,
     expandProgram,
   )
@@ -51,16 +53,21 @@ sync :: MaybeDeferred a -> Expand a
 sync (Deferred x) = x
 sync (Expanded x) = pure x
 
-type ExpandCtx = Map Ident PValue
+newtype ExpandCtx = ExpandCtx
+  { ctxEnv :: Map Ident PValue
+  }
+
+emptyExpandCtx :: ExpandCtx
+emptyExpandCtx = ExpandCtx Map.empty
 
 lookupIdent :: Ident -> ExpandCtx -> Maybe PValue
-lookupIdent = Map.lookup
+lookupIdent ident = Map.lookup ident . ctxEnv
 
 bindIdent :: Ident -> PValue -> ExpandCtx -> ExpandCtx
-bindIdent = Map.insert
+bindIdent ident v = ExpandCtx . Map.insert ident v . ctxEnv
 
-mergeEnv :: ExpandCtx -> ExpandCtx -> ExpandCtx
-mergeEnv = Map.union
+mergeEnv :: Map Ident PValue -> ExpandCtx -> ExpandCtx
+mergeEnv a = ExpandCtx . Map.union a . ctxEnv
 
 type Expand a = StateT ExpandCtx (ExceptT String Identity) a
 
