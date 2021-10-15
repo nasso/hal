@@ -16,6 +16,8 @@ import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Datum
 
 type Ident = String
@@ -190,11 +192,13 @@ isExpression :: Datum -> Expand Bool
 isExpression = fmap not . isDefinition
 
 defineForm :: Transformer
-defineForm (List [_, Lexeme (Sym n), e]) = do
+defineForm (List [_, Lexeme (Sym n), e]) =
   modify (bindIdent n Variable)
-  pure . Deferred $ do
-    e' <- expandExpr e
-    pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e'] :| []
+    >> pure
+      ( Deferred $ do
+          e' <- expandExpr e
+          pure $ List [Lexeme (Sym "define"), Lexeme (Sym n), e'] :| []
+      )
 defineForm ds = throwError $ "Invalid syntax: " ++ show ds
 
 beginForm :: Transformer
@@ -268,9 +272,9 @@ defineSyntaxForm (List [Lexeme (Sym "define-syntax"), Lexeme (Sym n), e]) = do
   -- TODO: expand e before evaluating it
   e' <- evalExpandExpr e
   case e' of
-    s@(Syntax _) -> do
+    s@(Syntax _) ->
       modify (bindIdent n $ EValue s)
-      pure . Expanded $ List [Lexeme (Sym "void")] :| []
+        >> pure (Expanded $ List [Lexeme (Sym "void")] :| [])
     _ -> throwError $ "Invalid syntax: " ++ show e
 defineSyntaxForm ds = throwError $ "Invalid syntax: " ++ show ds
 
@@ -282,15 +286,107 @@ evalExpandExpr dat@(List (Lexeme (Sym ident) : _)) = do
     _ -> throwError $ "Invalid syntax: " ++ show dat
 evalExpandExpr d = throwError $ "Invalid syntax: " ++ show d
 
+type StringSet = Set String
+
+data SyntaxRule = SyntaxRule Pattern Template
+
+data Pattern
+  = PAny
+  | PVar String
+  | PConst Constant
+  | PList [Pattern]
+  | PImproper [Pattern] Pattern
+  | PVarList [Pattern] Pattern [Pattern]
+  | PVarImproper [Pattern] Pattern [Pattern] Pattern
+  deriving (Show)
+
+data Template
+  = TVar String
+  | TConst Constant
+  | TList [(Template, Word)]
+  | TImproper [(Template, Word)] Template
+
+parseSyntaxRule :: StringSet -> Datum -> Expand SyntaxRule
+parseSyntaxRule lits (List [List (Lexeme (Sym _) : ps), template]) = do
+  (pat, vars) <- parsePattern lits $ List (Lexeme (Sym "_") : ps)
+  _ <- throwError $ show pat
+  template' <- parseTemplate lits vars template
+  pure $ SyntaxRule pat template'
+parseSyntaxRule _ d = throwError $ "Invalid syntax: " ++ show d
+
+checkedUnions :: [StringSet] -> Expand StringSet
+checkedUnions [] = pure Set.empty
+checkedUnions (s1 : ss) = do
+  s2 <- checkedUnions ss
+  if Set.disjoint s1 s2
+    then pure $ Set.union s1 s2
+    else
+      throwError $
+        "Duplicate pattern variable(s): "
+          ++ show (Set.toList $ Set.intersection s1 s2)
+
+parsePattern :: StringSet -> Datum -> Expand (Pattern, StringSet)
+parsePattern _ (Lexeme (Sym "...")) = throwError "Unexpected ellipsis"
+parsePattern _ (Lexeme (Sym "_")) = pure (PAny, Set.empty)
+parsePattern lits (Lexeme (Sym s))
+  | Set.member s lits = pure (PConst $ Sym s, Set.empty)
+  | otherwise = pure (PVar s, Set.singleton s)
+parsePattern _ (Lexeme c) = pure (PConst c, Set.empty)
+parsePattern _ (List []) = pure (PList [], Set.empty)
+parsePattern lits (List (pat : Lexeme (Sym "...") : pats)) = do
+  (pat', patvs) <- parsePattern lits pat
+  (ps, vs) <- unzip <$> mapM (parsePattern lits) pats
+  uvs <- checkedUnions $ patvs : vs
+  pure (PVarList [] pat' ps, uvs)
+parsePattern lits (List (p : ps)) = do
+  (p', pvs) <- parsePattern lits p
+  (ps', vs) <- parsePattern lits (List ps)
+  uvs <- checkedUnions [pvs, vs]
+  case ps' of
+    PList pats -> pure (PList (p' : pats), uvs)
+    PVarList pats pat pats' -> pure (PVarList (p' : pats) pat pats', uvs)
+    _ -> error "parsePattern: unexpected pattern type"
+parsePattern lits (ImproperList (pat :| []) cdrp) = do
+  (pat', patvs) <- parsePattern lits pat
+  (cdrp', cdrvs) <- parsePattern lits $ Lexeme cdrp
+  uvs <- checkedUnions [patvs, cdrvs]
+  pure (PImproper [pat'] cdrp', uvs)
+parsePattern lits (ImproperList (pat :| Lexeme (Sym "...") : pats) cdrp) = do
+  (pat', patvs) <- parsePattern lits pat
+  (ps, vs) <- unzip <$> mapM (parsePattern lits) pats
+  (cdrp', cdrvs) <- parsePattern lits (Lexeme cdrp)
+  uvs <- checkedUnions $ patvs : cdrvs : vs
+  pure (PVarImproper [] pat' ps cdrp', uvs)
+parsePattern lits (ImproperList (p :| ps : pss) cdrp) = do
+  (p', pvs) <- parsePattern lits p
+  (ps', vs) <- parsePattern lits (ImproperList (ps :| pss) cdrp)
+  uvs <- checkedUnions [pvs, vs]
+  case ps' of
+    PImproper pats cdrp' -> pure (PImproper (p' : pats) cdrp', uvs)
+    PVarImproper pats pat pats' cdrp' ->
+      pure (PVarImproper (p' : pats) pat pats' cdrp', uvs)
+    _ -> error "parsePattern: unexpected pattern type"
+
+parseTemplate :: StringSet -> StringSet -> Datum -> Expand Template
+parseTemplate = error "not implemented"
+
+parseLiterals :: [Datum] -> StringSet -> Expand StringSet
+parseLiterals [] s = pure s
+parseLiterals (Lexeme (Sym "...") : _) _ =
+  throwError "A syntax literal cannot be an ellipsis or an underscore."
+parseLiterals (Lexeme (Sym "_") : _) _ =
+  throwError "A syntax literal cannot be an ellipsis or an underscore."
+parseLiterals (Lexeme (Sym l) : ls) s = parseLiterals ls (Set.insert l s)
+parseLiterals (dat : _) _ = throwError $ "Not a literal: " ++ show dat
+
 syntaxRulesProc :: Datum -> Expand Transformer
-syntaxRulesProc dat@(List (_ : List lits : rules)) = do
-  lits' <- mapM getSymbol lits
-  makeSyntaxRulesTransformer lits' rules
-  where
-    getSymbol :: Datum -> Expand String
-    getSymbol (Lexeme (Sym s)) = pure s
-    getSymbol _ = throwError $ "Invalid syntax: " ++ show dat
+syntaxRulesProc (List (_ : List lits : rules)) = do
+  lits' <- parseLiterals lits Set.empty
+  rules' <- mapM (parseSyntaxRule lits') rules
+  makeSyntaxRulesTransformer rules'
 syntaxRulesProc d = throwError $ "Invalid syntax: " ++ show d
 
-makeSyntaxRulesTransformer :: [String] -> [Datum] -> Expand Transformer
-makeSyntaxRulesTransformer _ _ = throwError "syntax-rules unimplemented"
+makeSyntaxRulesTransformer :: [SyntaxRule] -> Expand Transformer
+makeSyntaxRulesTransformer [] =
+  pure $ \d -> throwError $ "Invalid syntax: " ++ show d
+makeSyntaxRulesTransformer _ = throwError "Unsupported."
