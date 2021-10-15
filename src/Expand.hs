@@ -299,7 +299,7 @@ makeSyntaxRulesTransformer rules = pure $ xformer rules
     xformer :: [SyntaxRule] -> Transformer
     xformer [] d = throwError $ "Invalid syntax: " ++ show d
     xformer (r : rs) d = case applyRule r d of
-      Just d' -> Expanded . (:| []) <$> d'
+      Just d' -> d' >>= expandForm
       Nothing -> xformer rs d
 
 type StringSet = Set String
