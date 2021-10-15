@@ -3,6 +3,7 @@ module Datum
     Parser,
     Constant (..),
     Datum (..),
+    makeImproper,
     dBool,
     dNumber,
     dChar,

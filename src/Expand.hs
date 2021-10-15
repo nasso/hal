@@ -286,15 +286,30 @@ evalExpandExpr dat@(List (Lexeme (Sym ident) : _)) = do
     _ -> throwError $ "Invalid syntax: " ++ show dat
 evalExpandExpr d = throwError $ "Invalid syntax: " ++ show d
 
+syntaxRulesProc :: Datum -> Expand Transformer
+syntaxRulesProc (List (_ : List lits : rules)) = do
+  lits' <- parseLiterals lits Set.empty
+  rules' <- mapM (parseSyntaxRule lits') rules
+  makeSyntaxRulesTransformer rules'
+syntaxRulesProc d = throwError $ "Invalid syntax: " ++ show d
+
+makeSyntaxRulesTransformer :: [SyntaxRule] -> Expand Transformer
+makeSyntaxRulesTransformer rules = pure $ xformer rules
+  where
+    xformer :: [SyntaxRule] -> Transformer
+    xformer [] d = throwError $ "Invalid syntax: " ++ show d
+    xformer (r : rs) d = case applyRule r d of
+      Just d' -> Expanded . (:| []) <$> d'
+      Nothing -> xformer rs d
+
 type StringSet = Set String
 
-data SyntaxRule = SyntaxRule Pattern Template
+data SyntaxRule = SyntaxRule Pattern Template deriving (Show)
 
 parseSyntaxRule :: StringSet -> Datum -> Expand SyntaxRule
 parseSyntaxRule lits (List [List (Lexeme (Sym _) : ps), template]) = do
   (pat, vars) <- parsePattern lits $ List (Lexeme (Sym "_") : ps)
   template' <- parseTemplate vars template
-  _ <- throwError $ show template'
   pure $ SyntaxRule pat template'
 parseSyntaxRule _ d = throwError $ "Invalid syntax: " ++ show d
 
@@ -314,7 +329,7 @@ data Pattern
   | PVar String
   | PConst Constant
   | PList [Pattern]
-  | PImproper [Pattern] Pattern
+  | PImproper (NonEmpty Pattern) Pattern
   | PVarList [Pattern] Pattern [Pattern]
   | PVarImproper [Pattern] Pattern [Pattern] Pattern
   deriving (Show)
@@ -344,7 +359,7 @@ parsePattern lits (ImproperList (pat :| []) cdrp) = do
   (pat', patvs) <- parsePattern lits pat
   (cdrp', cdrvs) <- parsePattern lits $ Lexeme cdrp
   uvs <- checkedUnions [patvs, cdrvs]
-  pure (PImproper [pat'] cdrp', uvs)
+  pure (PImproper (pat' :| []) cdrp', uvs)
 parsePattern lits (ImproperList (pat :| Lexeme (Sym "...") : pats) cdrp) = do
   (pat', patvs) <- parsePattern lits pat
   (ps, vs) <- unzip <$> mapM (parsePattern lits) pats
@@ -356,7 +371,7 @@ parsePattern lits (ImproperList (p :| ps : pss) cdrp) = do
   (ps', vs) <- parsePattern lits (ImproperList (ps :| pss) cdrp)
   uvs <- checkedUnions [pvs, vs]
   case ps' of
-    PImproper pats cdrp' -> pure (PImproper (p' : pats) cdrp', uvs)
+    PImproper pats cdrp' -> pure (PImproper (p' NonEmpty.<| pats) cdrp', uvs)
     PVarImproper pats pat pats' cdrp' ->
       pure (PVarImproper (p' : pats) pat pats' cdrp', uvs)
     _ -> error "parsePattern: unexpected pattern type"
@@ -367,25 +382,31 @@ data Template
   = TVar String
   | TConst Constant
   | TList [SubTemplate]
-  | TImproper [SubTemplate] Template
+  | TImproper (NonEmpty SubTemplate) Template
   deriving (Show)
 
 parseTemplate :: StringSet -> Datum -> Expand Template
 parseTemplate pvars (Lexeme (Sym s)) | Set.member s pvars = pure (TVar s)
 parseTemplate _ (Lexeme l) = pure (TConst l)
-parseTemplate pvars (List sts) = TList <$> parseSubTemplates pvars sts
+parseTemplate _ (List []) = pure $ TList []
+parseTemplate pvars (List (x : xs)) =
+  TList . NonEmpty.toList <$> parseSubTemplates pvars (x :| xs)
 parseTemplate pvars (ImproperList sts t) =
   TImproper
-    <$> parseSubTemplates pvars (NonEmpty.toList sts)
+    <$> parseSubTemplates pvars sts
     <*> parseTemplate pvars (Lexeme t)
 
-parseSubTemplates :: StringSet -> [Datum] -> Expand [SubTemplate]
-parseSubTemplates _ [] = pure []
-parseSubTemplates pvars (st : sts) = do
+parseSubTemplates ::
+  StringSet ->
+  NonEmpty Datum ->
+  Expand (NonEmpty SubTemplate)
+parseSubTemplates pvars (st :| sts) = do
   st' <- parseTemplate pvars st
   let (n, sts') = takeEllipses sts
-  sts'' <- parseSubTemplates pvars sts'
-  pure $ SubTemplate st' n : sts''
+  sts'' <- case sts' of
+    [] -> pure []
+    (x : xs) -> NonEmpty.toList <$> parseSubTemplates pvars (x :| xs)
+  pure $ SubTemplate st' n :| sts''
 
 takeEllipses :: [Datum] -> (Word, [Datum])
 takeEllipses (Lexeme (Sym "...") : sts) =
@@ -403,14 +424,167 @@ parseLiterals (Lexeme (Sym "_") : _) _ =
 parseLiterals (Lexeme (Sym l) : ls) s = parseLiterals ls (Set.insert l s)
 parseLiterals (dat : _) _ = throwError $ "Not a literal: " ++ show dat
 
-syntaxRulesProc :: Datum -> Expand Transformer
-syntaxRulesProc (List (_ : List lits : rules)) = do
-  lits' <- parseLiterals lits Set.empty
-  rules' <- mapM (parseSyntaxRule lits') rules
-  makeSyntaxRulesTransformer rules'
-syntaxRulesProc d = throwError $ "Invalid syntax: " ++ show d
+applyRule :: SyntaxRule -> Datum -> Maybe (Expand Datum)
+applyRule (SyntaxRule pat temp) form = do
+  match <- matchPattern pat form
+  pure $ applyTemplate match temp
 
-makeSyntaxRulesTransformer :: [SyntaxRule] -> Expand Transformer
-makeSyntaxRulesTransformer [] =
-  pure $ \d -> throwError $ "Invalid syntax: " ++ show d
-makeSyntaxRulesTransformer _ = throwError "Unsupported."
+data Capture
+  = Single Datum
+  | Multiple [Capture]
+  deriving (Show)
+
+newtype PatMatch = PatMatch (Map String Capture) deriving (Show)
+
+instance Semigroup PatMatch where
+  PatMatch m1 <> PatMatch m2 = PatMatch $ Map.unionWith unionCaps m1 m2
+    where
+      unionCaps (Multiple cs) (Multiple cs') = Multiple (cs <> cs')
+      unionCaps _ _ = error "duplicate pattern variables"
+
+matchPattern :: Pattern -> Datum -> Maybe PatMatch
+matchPattern PAny _ = Just $ PatMatch Map.empty
+matchPattern (PVar v) d = Just $ PatMatch $ Map.singleton v $ Single d
+matchPattern (PConst c) (Lexeme l) | c == l = Just $ PatMatch Map.empty
+matchPattern (PList []) (List []) = Just $ PatMatch Map.empty
+matchPattern (PList (p : ps)) (List (d : ds)) = do
+  m <- matchPattern p d
+  m' <- matchPattern (PList ps) (List ds)
+  pure $ m <> m'
+matchPattern (PImproper (p :| []) cdrp) (ImproperList (d :| []) cdr) = do
+  m <- matchPattern p d
+  m' <- matchPattern cdrp (Lexeme cdr)
+  pure $ m <> m'
+matchPattern
+  (PImproper (p :| ps : ps') cdrp)
+  (ImproperList (d :| ds : ds') cdr) = do
+    m <- matchPattern p d
+    m' <-
+      matchPattern (PImproper (ps :| ps') cdrp) (ImproperList (ds :| ds') cdr)
+    pure $ m <> m'
+
+-- (<pattern> <ellipsis> <pattern> ...)
+matchPattern (PVarList [] _ pmn) (List l)
+  | sameLength l pmn = matchPattern (PList pmn) (List l)
+matchPattern pat@(PVarList [] pe _) (List (d : ds)) = do
+  m <- matchMultiPattern pe d
+  m' <- matchPattern pat (List ds)
+  pure $ m <> m'
+
+-- (<pattern> ... <pattern> <ellipsis> <pattern> ...)
+matchPattern (PVarList (p : ps) pe pmn) (List (d : ds)) = do
+  m <- matchPattern p d
+  m' <- matchPattern (PVarList ps pe pmn) (List ds)
+  pure $ m <> m'
+
+-- (<pattern> <ellipsis> . <pattern>)
+matchPattern (PVarImproper [] pe [] cdrp) (ImproperList (d :| []) cdr) = do
+  m <- matchMultiPattern pe d
+  m' <- matchPattern cdrp $ Lexeme cdr
+  pure $ m <> m'
+
+-- (<pattern> <ellipsis> <pattern> ... . <pattern>)
+matchPattern (PVarImproper [] _ (pm1 : pmn) cdrp) (ImproperList (d :| ds) cdr)
+  | sameLength pmn ds =
+    -- only m-n forms are left, so the remaining forms must be an exact match
+    -- (as if there was no ellipsis)
+    matchPattern (PImproper (pm1 :| pmn) cdrp) (ImproperList (d :| ds) cdr)
+matchPattern pat@(PVarImproper [] pe _ _) (ImproperList (d :| ds : ds') cdr) =
+  -- more than m-n forms are left, so we must match the pattern that's followed
+  -- by the ellipsis
+  do
+    m <- matchMultiPattern pe d
+    m' <- matchPattern pat (ImproperList (ds :| ds') cdr)
+    pure $ m <> m'
+
+-- (<pattern> <pattern> <ellipsis> . <pattern>)
+matchPattern (PVarImproper [p] _ [] cdrp) (ImproperList (d :| []) cdr) = do
+  m <- matchPattern p d
+  m' <- matchPattern cdrp $ Lexeme cdr
+  pure $ m <> m'
+
+-- (<pattern> ... <pattern> <ellipsis> <pattern> ... . <pattern>)
+matchPattern
+  (PVarImproper (p : ps) pe pmn cdrp)
+  (ImproperList (d :| ds : ds') cdr) = do
+    m <- matchPattern p d
+    m' <-
+      matchPattern (PVarImproper ps pe pmn cdrp) (ImproperList (ds :| ds') cdr)
+    pure $ m <> m'
+matchPattern _ _ = Nothing
+
+sameLength :: [a] -> [b] -> Bool
+sameLength [] [] = True
+sameLength (_ : xs) (_ : ys) = sameLength xs ys
+sameLength _ _ = False
+
+matchMultiPattern :: Pattern -> Datum -> Maybe PatMatch
+matchMultiPattern p d = do
+  PatMatch m <- matchPattern p d
+  pure $ PatMatch $ Map.map makeMultiple m
+  where
+    makeMultiple cap = Multiple [cap]
+
+applyTemplate :: PatMatch -> Template -> Expand Datum
+applyTemplate _ (TConst c) = pure $ Lexeme c
+applyTemplate (PatMatch m) (TVar s) =
+  case Map.lookup s m of
+    Just (Single d) -> pure d
+    Just (Multiple _) -> throwError "Multiple values for a single variable"
+    _ -> throwError $ "Template variable " ++ show s ++ " not found."
+applyTemplate pm (TList sts) = do
+  sts' <- join <$> mapM (applySubTemplate pm) sts
+  pure $ List sts'
+applyTemplate pm (TImproper sts cdrt) = do
+  sts' <- join <$> mapM (applySubTemplate pm) (NonEmpty.toList sts)
+  cdrt' <- applyTemplate pm cdrt
+  -- copy chez's behaviour when we don't have enough values to make an improper
+  -- list: the template just becomes the cdr
+  case sts' of
+    [] -> pure cdrt'
+    (x : xs) -> pure $ makeImproper (x :| xs) cdrt'
+
+applySubTemplate :: PatMatch -> SubTemplate -> Expand [Datum]
+-- <template>
+applySubTemplate pm (SubTemplate t 0) = pure <$> applyTemplate pm t
+-- <template> <ellipsis> ...
+applySubTemplate pm (SubTemplate t n) = do
+  pms <- spreadMatches pm $ getTemplateVars t
+  join <$> mapM (flip applySubTemplate $ SubTemplate t (n - 1)) pms
+
+getTemplateVars :: Template -> StringSet
+getTemplateVars (TConst _) = Set.empty
+getTemplateVars (TVar s) = Set.singleton s
+getTemplateVars (TList sts) =
+  Set.unions $ map (getTemplateVars . getTemplate) sts
+  where
+    getTemplate (SubTemplate t _) = t
+getTemplateVars (TImproper sts cdr) =
+  Set.unions $
+    getTemplateVars cdr :
+    map (getTemplateVars . getTemplate) (NonEmpty.toList sts)
+  where
+    getTemplate (SubTemplate t _) = t
+
+-- | Spread one level of a pattern match result.
+-- The given set of strings is a set of variables used in the subtemplate that
+-- we're expanding. This set is used to determine how many times the subtemplate
+-- will be replicated. All variables of the set matching multiple values must
+-- match the same number of values.
+-- Variables matching a single value are replicated as necessary.
+spreadMatches :: PatMatch -> StringSet -> Expand [PatMatch]
+spreadMatches (PatMatch m) vars = do
+  let caps = Map.restrictKeys m vars
+  n <- case map length $ [ms | Multiple ms <- Map.elems caps] of
+    [] -> pure 0
+    n : ns' -> if all (== n) ns' then pure n else throwError "Ambiguous spread"
+  let unfoldCap (Single d) = replicate n (Single d)
+      unfoldCap (Multiple ds) = ds
+   in pure $ spreadCaps n $ Map.map unfoldCap caps
+
+spreadCaps :: Int -> Map String [Capture] -> [PatMatch]
+spreadCaps 0 _ = []
+spreadCaps n ms = pm : spreadCaps (n - 1) ms'
+  where
+    pm = PatMatch $ Map.map head ms
+    ms' = Map.map tail ms
