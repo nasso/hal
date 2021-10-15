@@ -290,27 +290,11 @@ type StringSet = Set String
 
 data SyntaxRule = SyntaxRule Pattern Template
 
-data Pattern
-  = PAny
-  | PVar String
-  | PConst Constant
-  | PList [Pattern]
-  | PImproper [Pattern] Pattern
-  | PVarList [Pattern] Pattern [Pattern]
-  | PVarImproper [Pattern] Pattern [Pattern] Pattern
-  deriving (Show)
-
-data Template
-  = TVar String
-  | TConst Constant
-  | TList [(Template, Word)]
-  | TImproper [(Template, Word)] Template
-
 parseSyntaxRule :: StringSet -> Datum -> Expand SyntaxRule
 parseSyntaxRule lits (List [List (Lexeme (Sym _) : ps), template]) = do
   (pat, vars) <- parsePattern lits $ List (Lexeme (Sym "_") : ps)
-  _ <- throwError $ show pat
-  template' <- parseTemplate lits vars template
+  template' <- parseTemplate vars template
+  _ <- throwError $ show template'
   pure $ SyntaxRule pat template'
 parseSyntaxRule _ d = throwError $ "Invalid syntax: " ++ show d
 
@@ -324,6 +308,16 @@ checkedUnions (s1 : ss) = do
       throwError $
         "Duplicate pattern variable(s): "
           ++ show (Set.toList $ Set.intersection s1 s2)
+
+data Pattern
+  = PAny
+  | PVar String
+  | PConst Constant
+  | PList [Pattern]
+  | PImproper [Pattern] Pattern
+  | PVarList [Pattern] Pattern [Pattern]
+  | PVarImproper [Pattern] Pattern [Pattern] Pattern
+  deriving (Show)
 
 parsePattern :: StringSet -> Datum -> Expand (Pattern, StringSet)
 parsePattern _ (Lexeme (Sym "...")) = throwError "Unexpected ellipsis"
@@ -367,8 +361,38 @@ parsePattern lits (ImproperList (p :| ps : pss) cdrp) = do
       pure (PVarImproper (p' : pats) pat pats' cdrp', uvs)
     _ -> error "parsePattern: unexpected pattern type"
 
-parseTemplate :: StringSet -> StringSet -> Datum -> Expand Template
-parseTemplate = error "not implemented"
+data SubTemplate = SubTemplate Template Word deriving (Show)
+
+data Template
+  = TVar String
+  | TConst Constant
+  | TList [SubTemplate]
+  | TImproper [SubTemplate] Template
+  deriving (Show)
+
+parseTemplate :: StringSet -> Datum -> Expand Template
+parseTemplate pvars (Lexeme (Sym s)) | Set.member s pvars = pure (TVar s)
+parseTemplate _ (Lexeme l) = pure (TConst l)
+parseTemplate pvars (List sts) = TList <$> parseSubTemplates pvars sts
+parseTemplate pvars (ImproperList sts t) =
+  TImproper
+    <$> parseSubTemplates pvars (NonEmpty.toList sts)
+    <*> parseTemplate pvars (Lexeme t)
+
+parseSubTemplates :: StringSet -> [Datum] -> Expand [SubTemplate]
+parseSubTemplates _ [] = pure []
+parseSubTemplates pvars (st : sts) = do
+  st' <- parseTemplate pvars st
+  let (n, sts') = takeEllipses sts
+  sts'' <- parseSubTemplates pvars sts'
+  pure $ SubTemplate st' n : sts''
+
+takeEllipses :: [Datum] -> (Word, [Datum])
+takeEllipses (Lexeme (Sym "...") : sts) =
+  (n + 1, sts')
+  where
+    (n, sts') = takeEllipses sts
+takeEllipses sts = (0, sts)
 
 parseLiterals :: [Datum] -> StringSet -> Expand StringSet
 parseLiterals [] s = pure s
