@@ -61,16 +61,18 @@ withStr s k = withStr' s go
     go (Left e) = throwError $ show e
     go (Right v) = k v
 
-withFile :: FilePath -> Eval () -> Eval ()
-withFile f e = do
+withFile :: FilePath -> ([Value] -> Eval ()) -> Eval ()
+withFile f k = do
   src <- liftIO $ readFile f
-  withStr src $ const e
+  withStr src k
 
-withFiles :: [FilePath] -> Eval () -> Eval ()
-withFiles = foldr ((.) . withFile) id
+withFiles :: [FilePath] -> ([Value] -> Eval ()) -> Eval ()
+withFiles [] k = k []
+withFiles [f] k = withFile f k
+withFiles (f : fs) k = withFile f $ const $ withFiles fs k
 
 withBaseLib :: Eval () -> Eval ()
-withBaseLib = withBuiltins . withFile "lang/base.scm"
+withBaseLib = withBuiltins . withFile "lang/base.scm" . const
 
 withBuiltins :: Eval () -> Eval ()
 withBuiltins = defineAll baseProcedures

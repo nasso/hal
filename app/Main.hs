@@ -55,9 +55,13 @@ printUsage = do
 vm :: [FilePath] -> Bool -> Eval ()
 vm files i =
   withBaseLib $
-    withFiles files $
-      when i $
-        callCC $ \exit -> define "exit" (Procedure $ const $ exit ()) $ repl ""
+    withFiles files $ \vs ->
+      liftIO (displayAll vs)
+        >> when
+          i
+          ( callCC $ \exit ->
+              define "exit" (Procedure $ const $ exit ()) $ repl ""
+          )
 
 repl :: String -> Eval ()
 repl = readForm
