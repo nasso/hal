@@ -2,13 +2,13 @@
 ;; supports the "defun" syntax
 (define-syntax define
   (syntax-rules ()
-    [(_ (var . formal) body ...) (define var (lambda formal body ...))]
+    [(define (var . formal) body ...) (define var (lambda formal body ...))]
     [
-      (_ (var formals ...) body ...)
+      (define (var formals ...) body ...)
       (define var (lambda (formals ...) body ...))
     ]
-    [(_ var) (define var (void))]
-    [(_ var expr) (__hal_core_define var expr)]
+    [(define var) (define var (void))]
+    [(define var expr) (__hal_core_define var expr)]
   )
 )
 
@@ -16,16 +16,16 @@
 ;; supports not being given any arguments
 (define-syntax begin
   (syntax-rules ()
-    [(_) (void)]
-    [(_ f ...) (__hal_core_begin f ...)]
+    [(begin) (void)]
+    [(begin f ...) (__hal_core_begin f ...)]
   )
 )
 
 ;; extend the "if" core form to allow omitting the "alternate" expression
 (define-syntax if
   (syntax-rules ()
-    [(_ test consequent alternate) (__hal_core_if test consequent alternate)]
-    [(_ test consequent) (if test consequent (void))]
+    [(if test consequent alternate) (__hal_core_if test consequent alternate)]
+    [(if test consequent) (if test consequent (void))]
   )
 )
 
@@ -82,19 +82,19 @@
 ;; "and" syntactic form
 (define-syntax and
   (syntax-rules ()
-    [(_) #t]
-    [(_ e) e]
-    [(_ e1 e2 ...) (if e1 (and e2 ...) #f)]
+    [(and) #t]
+    [(and e) e]
+    [(and e1 e2 ...) (if e1 (and e2 ...) #f)]
   )
 )
 
 ;; "or" syntactic form
 (define-syntax or
   (syntax-rules ()
-    [(_) #f]
-    [(_ e) e]
+    [(or) #f]
+    [(or e) e]
     [
-      (_ e1 e2 ...)
+      (or e1 e2 ...)
       (let ([__x e1])
         (if __x __x (or e2 ...))
       )
