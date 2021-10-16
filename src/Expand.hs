@@ -68,10 +68,10 @@ defaultExpandCtx :: ExpandCtx
 defaultExpandCtx =
   ExpandCtx $
     Map.fromList
-      [ ("define", EValue $ Syntax defineForm),
-        ("begin", EValue $ Syntax beginForm),
+      [ ("__hal_core_define", EValue $ Syntax defineForm),
+        ("__hal_core_if", EValue $ Syntax ifForm),
+        ("__hal_core_begin", EValue $ Syntax beginForm),
         ("lambda", EValue $ Syntax lambdaForm),
-        ("if", EValue $ Syntax ifForm),
         ("quote", EValue $ Syntax quoteForm),
         ("set!", EValue $ Syntax setForm),
         ("define-syntax", EValue $ Syntax defineSyntaxForm),
