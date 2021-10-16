@@ -102,6 +102,28 @@
   )
 )
 
+;; "cond" syntactic form
+(define-syntax cond
+  (syntax-rules (else =>)
+    [(_) (void)]
+    [(_ (else expr1 expr2 ...)) (begin expr1 expr2 ...)]
+    [(_ (test) clause2 ...) (or test (cond clause2 ...))]
+    [
+      (_ (test => expr) clause2 ...)
+      (let ([__x test])
+        (if __x
+          (expr __x)
+          (cond clause2 ...)
+        )
+      )
+    ]
+    [
+      (_ (test e1 e2 ...) clause2 ...)
+      (if test (begin e1 e2 ...) (cond clause2 ...))
+    ]
+  )
+)
+
 ; Standard procedures
 (define (list . x) x)
 
