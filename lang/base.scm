@@ -105,20 +105,24 @@
 ;; "cond" syntactic form
 (define-syntax cond
   (syntax-rules (else =>)
-    [(_) (void)]
-    [(_ (else expr1 expr2 ...)) (begin expr1 expr2 ...)]
-    [(_ (test) clause2 ...) (or test (cond clause2 ...))]
+    [(cond (else expr1 expr2 ...)) (begin expr1 expr2 ...)]
     [
-      (_ (test => expr) clause2 ...)
+      (cond (test => expr))
       (let ([__x test])
-        (if __x
-          (expr __x)
-          (cond clause2 ...)
-        )
+        (if __x (expr __x))
       )
     ]
     [
-      (_ (test e1 e2 ...) clause2 ...)
+      (cond (test => expr) clause2 ...)
+      (let ([__x test])
+        (if __x (expr __x) (cond clause2 ...))
+      )
+    ]
+    [(cond (test)) (or test)]
+    [(cond (test) clause2 ...) (or test (cond clause2 ...))]
+    [(cond (test e1 e2 ...)) (if test (begin e1 e2 ...))]
+    [
+      (cond (test e1 e2 ...) clause2 ...)
       (if test (begin e1 e2 ...) (cond clause2 ...))
     ]
   )
