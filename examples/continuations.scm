@@ -1,24 +1,36 @@
-(define for-each (lambda (f vs)
-    (if (null? vs)
-        (void)
-        (begin
-            (f (car vs))
-            (for-each f (cdr vs))
-        )
+(define (for-each f vs)
+  (if (not (null? vs))
+    (begin
+      (f (car vs))
+      (for-each f (cdr vs))
     )
-))
+  )
+)
 
-(define res (call/cc (lambda (exit)
-    (for-each
-        (lambda (x) (if (< x 0) (exit x) (void)))
-        '(54 0 37 -3 245 19)
+(define-syntax for
+  (syntax-rules (in)
+    [
+      (for var in expr body ...)
+      (for-each (lambda (var) body ...) expr)
+    ]
+  )
+)
+
+(define res
+  (call/cc (lambda (exit)
+      (for x in '(54 0 37 -3 245 19)
+        (if (< x 0)
+          (exit x)
+        )
+      )
+      #t
     )
-    #t
-)))
+  )
+)
 
 (if (eq? res -3)
-    (display "OK")
-    (display "KO")
+  (display "OK")
+  (display "KO")
 )
 
 (newline)
