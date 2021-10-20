@@ -135,8 +135,6 @@
 
 (define (atom? x) (not (pair? x)))
 
-(define (zero? n) (eq? n 0))
-
 (define (eqv? a b)
   (or
     (eq? a b)
@@ -151,3 +149,45 @@
 
 ; Not conformant to the standard: it doesn't handle cycles.
 (define equal? eqv?)
+
+; Numeric procedures
+(define (inexact? n) (not (exact? n)))
+
+(define (= n1 n2 . ns)
+  (and
+    (number? n1)
+    (number? n2)
+    (eq? n1 n2)
+    (or (null? ns) (apply = n2 ns))
+  )
+)
+
+(define (zero? n) (= n 0))
+
+(define (positive? n) (> n 0))
+
+(define (negative? n) (< n 0))
+
+(define (abs x) (if (negative? 0) (- x) x))
+
+(define (even? x) (if (= (mod x 2) 0) #t #f))
+
+(define (odd? x) (not (even? x)))
+
+(define (max x . xs)
+  (if (null? xs)
+    x
+    (let ([m (apply max xs)])
+      (if (> x m) x m)
+    )
+  )
+)
+
+(define (min x . xs)
+  (if (null? xs)
+    x
+    (let ([m (apply min xs)])
+      (if (> x m) m x)
+    )
+  )
+)
