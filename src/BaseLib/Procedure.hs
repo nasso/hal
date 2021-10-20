@@ -56,23 +56,18 @@ builtinPredicates :: [(Var, Value)]
 builtinPredicates =
   [ ("eq?", cbrProc1 (fmap Bool . builtinEq)),
     ("boolean?", cbvProc1 (fmap Bool . builtinIsBool)),
-    ("number?", cbvProc1 (fmap Bool . builtinIsNumber)),
     ("symbol?", cbvProc1 (fmap Bool . builtinIsSymbol)),
     ("char?", cbvProc1 (fmap Bool . builtinIsChar)),
     ("string?", cbvProc1 (fmap Bool . builtinIsString)),
     ("pair?", cbvProc1 (fmap Bool . builtinIsPair)),
     ("null?", cbvProc1 (fmap Bool . builtinIsNull))
   ]
+    ++ builtinNumPredicates
 
 builtinIsBool :: [Value] -> Eval Bool
 builtinIsBool [Bool _] = return True
 builtinIsBool [_] = return False
 builtinIsBool _ = throwError "boolean?: invalid arguments"
-
-builtinIsNumber :: [Value] -> Eval Bool
-builtinIsNumber [Number _] = return True
-builtinIsNumber [_] = return False
-builtinIsNumber _ = throwError "number?: invalid arguments"
 
 builtinIsSymbol :: [Value] -> Eval Bool
 builtinIsSymbol [Symbol _] = return True
@@ -341,3 +336,37 @@ builtinExpand [v] = do
   (ds, _) <- liftEither $ runExpand (expandProgram [v']) expandCtx
   return $ valueFromDatum <$> ds
 builtinExpand _ = throwError "expand: invalid arguments"
+
+builtinNumPredicates :: [(Var, Value)]
+builtinNumPredicates =
+  [ ("number?", cbvProc1 (fmap Bool . builtinIsNumber)),
+    ("real?", cbvProc1 (fmap Bool . builtinIsReal)),
+    ("rational?", cbvProc1 (fmap Bool . builtinIsRational)),
+    ("complex?", cbvProc1 (fmap Bool . builtinIsComplex)),
+    ("exact?", cbvProc1 (fmap Bool . builtinIsExact))
+  ]
+
+builtinIsNumber :: [Value] -> Eval Bool
+builtinIsNumber [Number _] = return True
+builtinIsNumber [_] = return False
+builtinIsNumber _ = throwError "number?: invalid arguments"
+
+builtinIsReal :: [Value] -> Eval Bool
+builtinIsReal [n] = builtinIsNumber [n]
+builtinIsReal _ = throwError "real?: invalid arguments"
+
+builtinIsRational :: [Value] -> Eval Bool
+builtinIsRational [Number (Ratio _)] = return True
+builtinIsRational [Number (Exact _)] = return True
+builtinIsRational [_] = return False
+builtinIsRational _ = throwError "rational?: invalid arguments"
+
+builtinIsComplex :: [Value] -> Eval Bool
+builtinIsComplex [Number _] = return True
+builtinIsComplex [_] = return False
+builtinIsComplex _ = throwError "complex?: invalid arguments"
+
+builtinIsExact :: [Value] -> Eval Bool
+builtinIsExact [Number (Exact _)] = return True
+builtinIsExact [_] = return False
+builtinIsExact _ = throwError "exact?: invalid arguments"
