@@ -2,7 +2,10 @@
 ;; supports the "defun" syntax
 (define-syntax define
   (syntax-rules ()
-    [(define (var . formal) body ...) (define var (lambda formal body ...))]
+    [
+      (define (var formals ... . formal) body ...)
+      (define var (lambda (formals ... . formal) body ...))
+    ]
     [
       (define (var formals ...) body ...)
       (define var (lambda (formals ...) body ...))
