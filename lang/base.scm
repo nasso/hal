@@ -15,6 +15,41 @@
   )
 )
 
+;; 2 car/cdr chained operations
+(define (caar e) (car (car e)))
+(define (cadr e) (car (cdr e)))
+(define (cdar e) (cdr (car e)))
+(define (cddr e) (cdr (cdr e)))
+
+;; 3 car/cdr chained operations
+(define (caaar e) (car (caar e)))
+(define (caadr e) (car (cadr e)))
+(define (cadar e) (car (cdar e)))
+(define (caddr e) (car (cddr e)))
+(define (cdaar e) (cdr (caar e)))
+(define (cdadr e) (cdr (cadr e)))
+(define (cddar e) (cdr (cdar e)))
+(define (cdddr e) (cdr (cddr e)))
+
+;; 4 car/cdr chained operations
+(define (caaaar e) (car (caaar e)))
+(define (caaadr e) (car (caadr e)))
+(define (caadar e) (car (cadar e)))
+(define (caaddr e) (car (caddr e)))
+(define (cadaar e) (car (cdaar e)))
+(define (cadadr e) (car (cdadr e)))
+(define (caddar e) (car (cddar e)))
+(define (cadddr e) (car (cdddr e)))
+(define (cdaaar e) (cdr (caaar e)))
+(define (cdaadr e) (cdr (caadr e)))
+(define (cdadar e) (cdr (cadar e)))
+(define (cdaddr e) (cdr (caddr e)))
+(define (cddaar e) (cdr (cdaar e)))
+(define (cddadr e) (cdr (cdadr e)))
+(define (cdddar e) (cdr (cddar e)))
+(define (cddddr e) (cdr (cdddr e)))
+
+
 ;; extended "begin" core form
 ;; supports not being given any arguments
 (define-syntax begin
