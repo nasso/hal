@@ -8,8 +8,8 @@ import Control.Monad.Trans.Parser (ParseError (ParseError))
 import Data.Stream
 import Lib
 import System.Environment (getArgs, getProgName)
-import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
+import System.Exit (ExitCode (ExitFailure), exitSuccess, exitWith)
+import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, isEOF, stderr, stdout)
 import TreeWalker
 
 data Args
@@ -63,11 +63,16 @@ vm files i =
               define "exit" (Procedure $ const $ exit ()) $ repl ""
           )
 
+secureGetLine :: IO String
+secureGetLine = do
+  end <- isEOF
+  if end then exitSuccess else getLine
+
 repl :: String -> Eval ()
 repl = readForm
   where
-    contLine "" = liftIO $ prompt >> getLine
-    contLine prev = (++) prev . (:) '\n' <$> liftIO (promptCont >> getLine)
+    contLine "" = liftIO $ prompt >> secureGetLine
+    contLine prev = (++) prev . (:) '\n' <$> liftIO (promptCont >> secureGetLine)
     readForm prev = do
       line <- contLine prev
       withStr' line (printLoop line) `catchError` displayError
