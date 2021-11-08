@@ -9,7 +9,7 @@ import Data.Stream
 import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, stderr, stdout)
+import System.IO (hFlush, hPrint, hPutStr, hPutStrLn, isEOF, stderr, stdout)
 import TreeWalker
 
 data Args
@@ -55,29 +55,37 @@ printUsage = do
 vm :: [FilePath] -> Bool -> Eval ()
 vm files i =
   withBaseLib $
-    withFiles files $ \vs ->
-      liftIO (displayAll vs)
-        >> when
-          i
-          ( callCC $ \exit ->
-              define "exit" (Procedure $ const $ exit ()) $ repl ""
-          )
+    withFiles files $
+      \vs -> liftIO (displayAll vs) >> when i startRepl
 
-repl :: String -> Eval ()
-repl = readForm
-  where
-    contLine "" = liftIO $ prompt >> getLine
-    contLine prev = (++) prev . (:) '\n' <$> liftIO (promptCont >> getLine)
-    readForm prev = do
-      line <- contLine prev
-      withStr' line (printLoop line) `catchError` displayError
-    displayError msg = liftIO (ePutStrLn msg) >> repl ""
+safeGetLine :: (() -> Eval a) -> String -> Eval String
+safeGetLine exit p =
+  do
+    end <- liftIO $ putStr p >> hFlush stdout >> isEOF
+    if end
+      then "" <$ exit ()
+      else liftIO getLine
 
-printLoop :: String -> StrEvalResult [Value] -> Eval ()
-printLoop _ (Right vs) = liftIO (displayAll vs) >> repl ""
-printLoop _ (Left (SyntaxError err)) = throwError err
-printLoop s (Left (CantParse e@(ParseError p _)))
-  | p == eol = repl s
+startRepl :: Eval ()
+startRepl =
+  callCC $
+    \exit ->
+      define "exit" (Procedure $ const $ exit ()) $
+        repl (safeGetLine exit) ""
+
+repl :: (String -> Eval String) -> String -> Eval ()
+repl getln prev =
+  let contLine "" = getln "> "
+      contLine prev' = (++) prev' . (:) '\n' <$> getln ".. "
+      displayError msg = liftIO (ePutStrLn msg) >> repl getln ""
+   in contLine prev >>= \line ->
+        withStr' line (printLoop (repl getln) line) `catchError` displayError
+
+printLoop :: (String -> Eval ()) -> String -> StrEvalResult [Value] -> Eval ()
+printLoop loop _ (Right vs) = liftIO (displayAll vs) >> loop ""
+printLoop _ _ (Left (SyntaxError err)) = throwError err
+printLoop loop s (Left (CantParse e@(ParseError p _)))
+  | p == eol = loop s
   | otherwise = throwError $ show e
   where
     allLines = lines s
@@ -90,12 +98,6 @@ displayAll :: [Value] -> IO ()
 displayAll (Void : vs') = displayAll vs'
 displayAll (v : vs') = print v >> displayAll vs'
 displayAll [] = pure ()
-
-prompt :: IO ()
-prompt = putStr "> " >> hFlush stdout
-
-promptCont :: IO ()
-promptCont = putStr ".. " >> hFlush stdout
 
 ePutStr :: String -> IO ()
 ePutStr = hPutStr stderr
