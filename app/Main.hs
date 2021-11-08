@@ -97,8 +97,10 @@ prompt = putStr "> " >> hFlush stdout
 promptCont :: IO ()
 promptCont = putStr ".. " >> hFlush stdout
 
-ePutStr, ePutStrLn :: String -> IO ()
+ePutStr :: String -> IO ()
 ePutStr = hPutStr stderr
+
+ePutStrLn :: String -> IO ()
 ePutStrLn = hPutStrLn stderr
 
 ePrint :: Show a => a -> IO ()
