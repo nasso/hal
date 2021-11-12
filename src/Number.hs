@@ -10,7 +10,17 @@ data Number
   = Exact Integer
   | Ratio Rational
   | Inexact Double
-  deriving (Eq)
+
+instance Eq Number where
+  Exact x == Exact y = x == y
+  Exact x == Ratio y = fromIntegral x == y
+  Exact x == Inexact y = fromIntegral x == y
+  Ratio x == Exact y = x == fromIntegral y
+  Ratio x == Ratio y = x == y
+  Ratio x == Inexact y = fromRational x == y
+  Inexact x == Exact y = x == fromIntegral y
+  Inexact x == Ratio y = x == fromRational y
+  Inexact x == Inexact y = x == y
 
 instance Show Number where
   show (Exact i) = show i

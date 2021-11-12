@@ -133,8 +133,8 @@
     [(or e) e]
     [
       (or e1 e2 ...)
-      (let ([__x e1])
-        (if __x __x (or e2 ...))
+      (let ([__or_x e1])
+        (if __or_x __or_x (or e2 ...))
       )
     ]
   )
@@ -146,14 +146,14 @@
     [(cond (else expr1 expr2 ...)) (begin expr1 expr2 ...)]
     [
       (cond (test => expr))
-      (let ([__x test])
-        (if __x (expr __x))
+      (let ([__cond_x test])
+        (if __cond_x (expr __cond_x))
       )
     ]
     [
       (cond (test => expr) clause2 ...)
-      (let ([__x test])
-        (if __x (expr __x) (cond clause2 ...))
+      (let ([__cond_x test])
+        (if __cond_x (expr __cond_x) (cond clause2 ...))
       )
     ]
     [(cond (test)) (or test)]
@@ -162,6 +162,29 @@
     [
       (cond (test e1 e2 ...) clause2 ...)
       (if test (begin e1 e2 ...) (cond clause2 ...))
+    ]
+  )
+)
+
+(define-syntax case
+  (syntax-rules (else)
+    [
+      (case expr0
+        ((key ...) expr1 expr2 ...) ...
+        (else else_expr1 else_expr2 ...))
+      (let ([__case_x expr0])
+        (cond
+          ((or (eqv? __case_x key) ...) expr1 expr2 ...) ...
+          (else else_expr1 else_expr2 ...)))
+    ]
+    [
+      (case expr0
+        ((key ...) expr1 expr2 ...)
+        ((c2_key ...) c2_expr1 c2_expr2 ...) ...)
+      (let ([__case_x expr0])
+        (cond
+          ((or (eqv? __case_x key) ...) expr1 expr2 ...)
+          ((or (eqv? __case_x c2_key) ...) c2_expr1 c2_expr2 ...) ...))
     ]
   )
 )
@@ -190,15 +213,6 @@
 
 ; Numeric procedures
 (define (inexact? n) (not (exact? n)))
-
-(define (= n1 n2 . ns)
-  (and
-    (number? n1)
-    (number? n2)
-    (eq? n1 n2)
-    (or (null? ns) (apply = n2 ns))
-  )
-)
 
 (define (zero? n) (= n 0))
 
