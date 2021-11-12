@@ -278,9 +278,10 @@ sign :: Parser Sign
 sign = like '-' $> Minus <|> optional (like '+') $> Plus
 
 ureal :: Int -> Exactness -> Parser Number
-ureal r e = ((/) <$> uint <*> (like '/' >> uint)) <|> decimal r e
+ureal r e = ((/) <$> uint <*> (like '/' >> nonzero)) <|> decimal r e
   where
-    uint = uinteger r e
+    uint = uinteger r e <?> "natural"
+    nonzero = satisfy uint (/= 0) <?> "non-zero value"
 
 decimal :: Int -> Exactness -> Parser Number
 decimal 10 e@Datum.Exact = do
