@@ -169,7 +169,16 @@
         (assert-eqv (append '(a b c) '()) '(a b c))
         (assert-eqv (append '() '(a b c)) '(a b c))
         (assert-eqv (append '(a b) '(c d)) '(a b c d))
-        (assert-eqv (append '(a b) 'c) '(a b . c)))])
+        (assert-eqv (append '(a b) 'c) '(a b . c)))]
+    ["filter empty list" (assert-eqv (filter odd? '()) '())]
+    ["filter odd numbers"
+      (assert-eqv
+        (filter odd? '(1 2 3 4 5 6))
+        '(1 3 5))]
+    ["filter in range"
+      (assert-eqv
+        (filter (lambda (x) (and (> x 0) (< x 10))) '(-5 15 3 14 -20 6 0 -9))
+        '(3 6))])
 
   ("mapping and folding"
     ["map empty list" (assert-eqv (map list '()) '())]

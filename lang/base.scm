@@ -283,3 +283,6 @@
         (append
           (map car lss)
           (list (apply fold-right f a (cdr ls) (map cdr lss)))))]))
+
+(define (filter p l)
+  (fold-right (lambda (x a) (if (p x) (cons x a) a)) '() l))
