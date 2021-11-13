@@ -74,6 +74,11 @@
       (let ([var init] ...) body1 body2 ...)
       ((lambda (var ...) body1 body2 ...) init ...)
     ]
+    [
+      (let name ([var expr] ...) body1 body2 ...)
+      ((letrec ([name (lambda (var ...) body1 body2 ...)])
+        name) expr ...)
+    ]
   )
 )
 
@@ -109,8 +114,10 @@
   (syntax-rules ()
     [
       (letrec* ([var init] ...) body1 body2 ...)
-      (let ([var (void)] ...)
+      (let ([var #f] ...)
         (set! var init) ...
+        ; use let here because the body might contain definitions + expressions
+        ; a "begin" with definitions wouldn't be allowed here
         (let () body1 body2 ...)
       )
     ]
@@ -190,6 +197,8 @@
 )
 
 ; Standard procedures
+(define (cons* x . xs) (if (null? xs) x (cons x (apply cons* xs))))
+
 (define (list . x) x)
 
 (define (not x) (if x #f #t))
@@ -203,10 +212,7 @@
       (pair? a)
       (pair? b)
       (eqv? (car a) (car b))
-      (eqv? (cdr a) (cdr b))
-    )
-  )
-)
+      (eqv? (cdr a) (cdr b)))))
 
 ; Not conformant to the standard: it doesn't handle cycles.
 (define equal? eqv?)
@@ -220,7 +226,7 @@
 
 (define (negative? n) (< n 0))
 
-(define (abs x) (if (negative? 0) (- x) x))
+(define (abs x) (if (negative? x) (- x) x))
 
 (define (even? x) (if (= (mod x 2) 0) #t #f))
 
@@ -230,16 +236,50 @@
   (if (null? xs)
     x
     (let ([m (apply max xs)])
-      (if (> x m) x m)
-    )
-  )
-)
+      (if (> x m) x m))))
 
 (define (min x . xs)
   (if (null? xs)
     x
     (let ([m (apply min xs)])
-      (if (> x m) m x)
-    )
-  )
-)
+      (if (> x m) m x))))
+
+; Operations on lists
+(define (append . xs)
+  (let f ([ls '()] [xs xs])
+    (if (null? xs)
+      ls
+      (let g ([ls ls])
+        (if (null? ls)
+          (f (car xs) (cdr xs))
+          (cons (car ls) (g (cdr ls))))))))
+
+(define (map f ls . lss)
+  (cond
+    [(null? ls) '()]
+    [(null? lss) (cons (f (car ls)) (map f (cdr ls)))]
+    [else
+      (cons
+        (apply f (car ls) (map car lss))
+        (apply map f (cdr ls) (map cdr lss)))]))
+
+(define (fold-left f a ls . lss)
+  (cond
+    [(null? ls) a]
+    [(null? lss) (fold-left f (f a (car ls)) (cdr ls))]
+    [else
+      (apply fold-left f
+        (apply f a (car ls) (map car lss))
+        (cdr ls)
+        (map cdr lss))]))
+
+(define (fold-right f a ls . lss)
+  (cond
+    [(null? ls) a]
+    [(null? lss) (f (car ls) (fold-right f a (cdr ls)))]
+    [else
+      (apply f
+        (car ls)
+        (append
+          (map car lss)
+          (list (apply fold-right f a (cdr ls) (map cdr lss)))))]))

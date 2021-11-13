@@ -42,15 +42,15 @@ builtinList =
 
 builtinPair :: [Value] -> Eval Value
 builtinPair [a, b] = return $ Pair a b
-builtinPair _ = throwError "cons: wrong number of arguments"
+builtinPair v = throwError $ "cons: invalid arguments: " ++ show v
 
 builtinCar :: [Value] -> Eval Value
 builtinCar [Pair car _] = return car
-builtinCar _ = throwError "car: invalid arguments"
+builtinCar v = throwError $ "car: invalid arguments: " ++ show v
 
 builtinCdr :: [Value] -> Eval Value
 builtinCdr [Pair _ cdr] = return cdr
-builtinCdr _ = throwError "cdr: invalid arguments"
+builtinCdr v = throwError $ "cdr: invalid arguments: " ++ show v
 
 builtinPredicates :: [(Var, Value)]
 builtinPredicates =
