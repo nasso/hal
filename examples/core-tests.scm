@@ -68,6 +68,14 @@
     [(1) 1]
     [else (+ (fib (- n 1)) (fib (- n 2)))]))
 
+; Tail-recursive fibonacci function using accumulators.
+(define (fib-tr n)
+  (let rec ([n n] [a 0] [b 1])
+    (case n
+      [(0) a]
+      [(1) b]
+      [else (rec (- n 1) b (+ a b))])))
+
 (test-suites
   ("predicates"
     ["eq? on same symbols" (eq? 'a 'a)]
@@ -112,7 +120,18 @@
     ["fib-7" (assert-eqv (fib 7) 13)]
     ["fib-8" (assert-eqv (fib 8) 21)]
     ["fib-9" (assert-eqv (fib 9) 34)]
-    ["fib-10" (assert-eqv (fib 10) 55)])
+    ["fib-10" (assert-eqv (fib 10) 55)]
+    ["fib-tr-0" (assert-eqv (fib-tr 0) 0)]
+    ["fib-tr-1" (assert-eqv (fib-tr 1) 1)]
+    ["fib-tr-2" (assert-eqv (fib-tr 2) 1)]
+    ["fib-tr-3" (assert-eqv (fib-tr 3) 2)]
+    ["fib-tr-4" (assert-eqv (fib-tr 4) 3)]
+    ["fib-tr-5" (assert-eqv (fib-tr 5) 5)]
+    ["fib-tr-6" (assert-eqv (fib-tr 6) 8)]
+    ["fib-tr-7" (assert-eqv (fib-tr 7) 13)]
+    ["fib-tr-8" (assert-eqv (fib-tr 8) 21)]
+    ["fib-tr-9" (assert-eqv (fib-tr 9) 34)]
+    ["fib-tr-10" (assert-eqv (fib-tr 10) 55)])
 
   ("arithmetics"
     ["abs of zero is zero" (assert-eqv (abs 0) 0)]
