@@ -14,13 +14,14 @@ import qualified Data.IntMap.Strict as IntMap
 -- | Efficient map from random ints to values of type @a@.
 data Heap a = Heap
   { values :: IntMap a,
-    freedSlots :: [Int]
+    freedSlots :: [Int],
+    nextSlot :: Int
   }
   deriving (Eq, Show)
 
 -- | An empty heap.
 empty :: Heap a
-empty = Heap IntMap.empty []
+empty = Heap IntMap.empty [] 0
 
 -- | Store a value in the heap.
 store :: Int -> a -> Heap a -> Heap a
@@ -32,8 +33,8 @@ alloc v h =
   case freedSlots h of
     (k : ks) -> (k, h {values = IntMap.insert k v (values h), freedSlots = ks})
     [] ->
-      let k = IntMap.size (values h)
-       in (k, h {values = IntMap.insert k v (values h)})
+      let k = nextSlot h
+       in (k, h {values = IntMap.insert k v (values h), nextSlot = k + 1})
 
 -- | Free a slot in the heap.
 free :: Int -> Heap a -> Heap a
