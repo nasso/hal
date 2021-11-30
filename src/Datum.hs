@@ -1,6 +1,5 @@
 module Datum
   ( datum,
-    Parser,
     Constant (..),
     Datum (..),
     makeImproper,
@@ -14,7 +13,7 @@ module Datum
 where
 
 import Control.Monad
-import Control.Monad.Trans.Parser
+import Control.Monad.Parser
 import Data.Char
   ( GeneralCategory (..),
     chr,
@@ -25,26 +24,21 @@ import Data.Char
     ord,
   )
 import Data.Functor (($>))
-import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Stream (LineStream)
 import Number
 import Numeric (readDec, readHex, readInt, readOct)
 
--- | A parser from `String` to values of type `a`.
-type Parser a = ParserT LineStream Identity a
-
 -- | Parse a continuous sequence of items not containing the given string.
-commentText :: Parser ()
+commentText :: StringParser ()
 commentText = void $ many $ notFollowedBy (string "#|" <|> string "|#") >> item
 
 -- | Whitespace as defined by the R6RS standard.
-whitespace :: Parser ()
+whitespace :: StringParser ()
 whitespace = void $ match isSpace <?> "whitespace"
 
 -- | Make a parser consume any trailing whitespace.
-lexeme :: Parser a -> Parser a
+lexeme :: StringParser a -> StringParser a
 lexeme p = many atmosphere *> p <* many atmosphere
   where
     atmosphere = whitespace <|> comment
@@ -55,19 +49,19 @@ lexeme p = many atmosphere *> p <* many atmosphere
     datumComment = void $ string "#;" >> many atmosphere >> datum
 
 -- | Parse exactly the given string and discard any trailing whitespace.
-symbol :: String -> Parser String
+symbol :: String -> StringParser String
 symbol s = lexeme (string s) <?> "\"" ++ s ++ "\""
 
 -- | Parse a value wrapped in parentheses or square brackets.
-paren :: Parser a -> Parser a
+paren :: StringParser a -> StringParser a
 paren p = symbol "(" *> p <* symbol ")" <|> symbol "[" *> p <* symbol "]"
 
 -- | A delimiter for identifiers, ., numbers, characters and booleans.
-delimiter :: Parser ()
+delimiter :: StringParser ()
 delimiter = void (oneOf "()[]\";#") <|> whitespace
 
 -- | The '.' symbol.
-dot :: Parser ()
+dot :: StringParser ()
 dot = like '.' >> followedBy (delimiter <|> eof)
 
 -- | Represents any simple constant Scheme value.
@@ -121,7 +115,7 @@ instance Show Datum where
       ++ show tail'
       ++ ")"
 
-datum :: Parser Datum
+datum :: StringParser Datum
 datum = Lexeme <$> lexeme literal <|> dList
   where
     literal =
@@ -132,19 +126,19 @@ datum = Lexeme <$> lexeme literal <|> dList
         <|> Sym <$> dSym
         <?> "literal"
 
-dBool :: Parser Bool
+dBool :: StringParser Bool
 dBool =
   string "#t" $> True <|> string "#f" $> False
     <* followedBy (delimiter <|> eof)
     <?> "boolean literal"
 
-dChar :: Parser Char
+dChar :: StringParser Char
 dChar =
   string "#\\" >> (characterName <|> item)
     <* followedBy (delimiter <|> eof)
     <?> "character literal"
 
-characterName :: Parser Char
+characterName :: StringParser Char
 characterName =
   string "alarm" $> '\x0007'
     <|> string "backspace" $> '\x0008'
@@ -157,7 +151,7 @@ characterName =
     <|> string "tab" $> '\t'
     <|> string "vtab" $> '\v'
 
-inlineHexEscape :: Parser Char
+inlineHexEscape :: StringParser Char
 inlineHexEscape = do
   code <- string "\\x" *> many (digit 16) <* string ";"
   case readHex code of
@@ -188,7 +182,7 @@ isConstituentCategory OtherSymbol = True
 isConstituentCategory PrivateUse = True
 isConstituentCategory _ = False
 
-dSym :: Parser String
+dSym :: StringParser String
 dSym =
   let init' = match isConstituent <|> oneOf "!$%&*/:<=>?^_~" <|> inlineHexEscape
       subsequent = init' <|> digit 10 <|> oneOf ".+-@"
@@ -201,14 +195,14 @@ dSym =
         <* followedBy (delimiter <|> eof)
         <?> "identifier"
 
-dString :: Parser String
+dString :: StringParser String
 dString = like '"' *> many strElem <* like '"' <?> "string literal"
   where
     strElem =
       (noneOf "\"\\" <|> escapeSequence <|> inlineHexEscape)
         <* optional escapeNewline
 
-escapeSequence :: Parser Char
+escapeSequence :: StringParser Char
 escapeSequence =
   string "\\a" $> '\a'
     <|> string "\\b" $> '\b'
@@ -221,13 +215,13 @@ escapeSequence =
     <|> string "\\\\" $> '\\'
     <?> "escape sequence"
 
-escapeNewline :: Parser ()
+escapeNewline :: StringParser ()
 escapeNewline =
   like '\\'
     *> many intralineWhitespace
     *> lineEnding <* many intralineWhitespace
 
-lineEnding :: Parser ()
+lineEnding :: StringParser ()
 lineEnding =
   void $
     string "\n" -- newline
@@ -237,13 +231,13 @@ lineEnding =
       <|> string "\r\x0085" -- carriage-return next-line
       <|> string "\r" -- carriage-return
 
-intralineWhitespace :: Parser Char
+intralineWhitespace :: StringParser Char
 intralineWhitespace = match ((==) Space . generalCategory)
 
 data Exactness = Exact | Inexact | Unspecified deriving (Eq, Show)
 
 -- | Parser for any Scheme number literal.
-dNumber :: Parser Number
+dNumber :: StringParser Number
 dNumber =
   choice [num 10, num 16, num 2, num 8] <* followedBy (delimiter <|> eof)
     <?> "number literal"
@@ -254,10 +248,10 @@ dNumber =
       (like '#' >> (oneOf "iI" $> Datum.Inexact <|> oneOf "eE" $> Datum.Exact))
         <|> pure Unspecified
 
-complex :: Int -> Exactness -> Parser Number
+complex :: Int -> Exactness -> StringParser Number
 complex = real
 
-real :: Int -> Exactness -> Parser Number
+real :: Int -> Exactness -> StringParser Number
 real r e =
   do
     s <- sign
@@ -266,7 +260,7 @@ real r e =
     <|> (like '+' >> naninf)
     <|> (like '-' >> negate <$> naninf)
 
-naninf :: Parser Number
+naninf :: StringParser Number
 naninf = string "nan.0" $> nan <|> string "inf.0" $> inf
   where
     nan = 1 / 0
@@ -274,16 +268,16 @@ naninf = string "nan.0" $> nan <|> string "inf.0" $> inf
 
 data Sign = Plus | Minus deriving (Eq, Show)
 
-sign :: Parser Sign
+sign :: StringParser Sign
 sign = like '-' $> Minus <|> optional (like '+') $> Plus
 
-ureal :: Int -> Exactness -> Parser Number
+ureal :: Int -> Exactness -> StringParser Number
 ureal r e = ((/) <$> uint <*> (like '/' >> nonzero)) <|> decimal r e
   where
     uint = uinteger r e <?> "natural"
     nonzero = satisfy uint (/= 0) <?> "non-zero value"
 
-decimal :: Int -> Exactness -> Parser Number
+decimal :: Int -> Exactness -> StringParser Number
 decimal 10 e@Datum.Exact = do
   i <- uinteger 10 e
   ex <- optional decimalExp
@@ -301,38 +295,38 @@ decimal 10 e =
         Just ex' -> return $ blur i * 10 ^^ ex'
 decimal r _ = error $ "decimal called with r = " ++ show r
 
-smallDecimal :: Parser Number
+smallDecimal :: StringParser Number
 smallDecimal = do
   _ <- like '.'
-  ds <- some (digit 10)
+  ds <- many1 (digit 10)
   ex <- optional decimalExp
   let n = Number.Inexact (read $ "0." ++ ds :: Double)
   case ex of
     Nothing -> return n
     Just ex' -> return $ n * 10 ^^ ex'
 
-bigDecimal :: Parser Number
+bigDecimal :: StringParser Number
 bigDecimal = do
-  ds <- some (digit 10)
+  ds <- many1 (digit 10)
   _ <- like '.'
-  fs <- some (digit 10) <|> pure "0"
+  fs <- many1 (digit 10) <|> pure "0"
   ex <- optional decimalExp
   let n = Number.Inexact (read $ ds ++ "." ++ fs :: Double)
   case ex of
     Nothing -> return n
     Just ex' -> return $ n * 10 ^^ ex'
 
-decimalExp :: Parser Integer
+decimalExp :: StringParser Integer
 decimalExp = do
   s <- oneOf "eE" >> sign
-  ex <- readBase 10 <$> some (digit 10)
+  ex <- readBase 10 <$> many1 (digit 10)
   return $ case s of
     Plus -> ex
     Minus -> negate ex
 
-uinteger :: Int -> Exactness -> Parser Number
-uinteger r Datum.Inexact = Number.Inexact <$> (readBase r <$> some (digit r))
-uinteger r _ = Number.Exact <$> (readBase r <$> some (digit r))
+uinteger :: Int -> Exactness -> StringParser Number
+uinteger r Datum.Inexact = Number.Inexact <$> (readBase r <$> many1 (digit r))
+uinteger r _ = Number.Exact <$> (readBase r <$> many1 (digit r))
 
 readBase :: (Eq a, Num a) => Int -> String -> a
 readBase 2 s = v
@@ -343,14 +337,14 @@ readBase 10 s = v where [(v, "")] = readDec s
 readBase 16 s = v where [(v, "")] = readHex s
 readBase r _ = error $ "Attempt to read number in base " ++ show r
 
-radix :: Int -> Parser ()
+radix :: Int -> StringParser ()
 radix 2 = void $ like '#' >> oneOf "bB"
 radix 8 = void $ like '#' >> oneOf "oO"
 radix 10 = void $ optional (like '#' >> oneOf "dD")
 radix 16 = void $ like '#' >> oneOf "xX"
 radix r = error $ "unsupported radix: " ++ show r
 
-digit :: Int -> Parser Char
+digit :: Int -> StringParser Char
 digit 2 = oneOf "01" <?> "binary digit"
 digit 8 = oneOf "01234567" <?> "octal digit"
 digit 10 = match isDigit <?> "decimal digit"
@@ -358,7 +352,7 @@ digit 16 = match isDigit <|> oneOf "abcdefABCDEF" <?> "hexadecimal digit"
 digit r = error $ "unsupported radix: " ++ show r
 
 -- | Parser for Scheme lists (both proper and improper).
-dList :: Parser Datum
+dList :: StringParser Datum
 dList =
   paren
     ( do
@@ -372,13 +366,13 @@ dList =
     <|> abbreviation
     <?> "list"
 
-abbreviation :: Parser Datum
+abbreviation :: StringParser Datum
 abbreviation = do
   s <- Lexeme . Sym <$> abbrevPrefix
   d <- datum
   return $ List [s, d]
 
-abbrevPrefix :: Parser String
+abbrevPrefix :: StringParser String
 abbrevPrefix =
   symbol "'" $> "quote"
     <|> symbol "`" $> "quasiquote"

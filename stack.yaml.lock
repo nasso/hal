@@ -3,7 +3,18 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    name: comparse
+    version: 0.1.0.0
+    git: https://github.com/nasso/comparse.git
+    pantry-tree:
+      size: 1352
+      sha256: 6b99a9e03b0331480dfb43bbc119beaa60d62bb5d1b3dd41678f570d2a122d74
+    commit: 0f88ec02272bcac4fd5a3cbbc9f137156ba9633b
+  original:
+    git: https://github.com/nasso/comparse.git
+    commit: 0f88ec02272bcac4fd5a3cbbc9f137156ba9633b
 snapshots:
 - completed:
     size: 587546

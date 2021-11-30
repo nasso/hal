@@ -1,11 +1,10 @@
 module Main where
 
 import Control.Monad
-import Control.Monad.Cont.Class
-import Control.Monad.Except.Class
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Parser (ParseError (ParseError))
-import Data.Stream
+import Control.Monad.Cont
+import Control.Monad.Except
+import Control.Monad.Parser (ParseError (ParseError))
+import Data.Stream.StringLines (StringPos (..))
 import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -92,7 +91,7 @@ printLoop loop s (Left (CantParse e@(ParseError p _)))
     lastLine = last allLines
     lastLineNum = length allLines - 1
     lastLineCol = length lastLine
-    eol = LinePos lastLineNum lastLineCol lastLine
+    eol = StringPos lastLineNum lastLineCol lastLine
 
 displayAll :: [Value] -> IO ()
 displayAll (Void : vs') = displayAll vs'

@@ -10,13 +10,13 @@ module Syntax
 where
 
 import Control.Monad (join)
-import Control.Monad.Trans.Parser
+import Control.Monad.Parser
 import Data.Functor.Identity (Identity)
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty
-import Data.Stream (ListStream (ListStream))
 import Datum (Datum)
 import qualified Datum
+import ListStream (ListStream (ListStream))
 
 type Var = String
 
@@ -42,7 +42,7 @@ data Formals
 type AstReader a = ParserT (ListStream Datum) Identity a
 
 exec' :: [Datum] -> AstReader a -> AstReader (a, ListStream Datum)
-exec' l = exec (ListStream l 0)
+exec' l = withInput (ListStream l 0)
 
 constant :: AstReader Datum.Constant
 constant = do
@@ -81,7 +81,7 @@ form = Def <$> definition <|> Expr <$> expression
 definition :: AstReader [(Var, Expression)]
 definition =
   join
-    <$> some
+    <$> many1
       ( properP
           ( (: []) <$> ((,) <$> (sym "define" *> var) <*> expression)
               <|> join <$> (sym "begin" >> many definition)
@@ -93,8 +93,8 @@ expression =
   Lit <$> constant
     <|> properP
       ( Quote <$> (sym "quote" *> item)
-          <|> Begin <$> (sym "begin" *> some1 expression)
-          <|> Lambda <$> (sym "lambda" *> formals) <*> some1 expression
+          <|> Begin <$> (sym "begin" *> some expression)
+          <|> Lambda <$> (sym "lambda" *> formals) <*> some expression
           <|> If <$> (sym "if" *> expression) <*> expression <*> expression
           <|> Set <$> (sym "set!" *> var) <*> expression
           <|> Application <$> expression <*> many expression

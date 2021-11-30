@@ -8,9 +8,8 @@ module Expand
   )
 where
 
-import Control.Monad (join)
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.State
+import Control.Monad.Except
+import Control.Monad.State
 import Data.Functor.Identity (Identity (runIdentity))
 import Data.List.NonEmpty (NonEmpty (..))
 import qualified Data.List.NonEmpty as NonEmpty

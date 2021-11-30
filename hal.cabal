@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b2ca9d28d6e28c564e4e023905b91a44c456bb88eff18afed0da44df017d340a
+-- hash: c101e8b5959be1b92978ab1fa0105824cf925a92b1bd1b1f133fe9755e8dfac2
 
 name:           hal
 version:        0.1.0.0
@@ -32,6 +32,7 @@ library
       Expand
       Heap
       Lib
+      ListStream
       Number
       Syntax
       TreeWalker
@@ -42,8 +43,10 @@ library
   ghc-options: -Wall
   build-depends:
       base >=4.9 && <5
+    , comparse
     , containers ==0.6.*
-    , my-monads
+    , mtl ==2.2.*
+    , transformers ==0.5.*
   default-language: Haskell2010
 
 executable hal
@@ -55,9 +58,11 @@ executable hal
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.9 && <5
+    , comparse
     , containers ==0.6.*
     , hal
-    , my-monads
+    , mtl ==2.2.*
+    , transformers ==0.5.*
   default-language: Haskell2010
 
 test-suite hal-test
@@ -71,7 +76,9 @@ test-suite hal-test
   build-depends:
       QuickCheck
     , base >=4.9 && <5
+    , comparse
     , containers ==0.6.*
     , hal
-    , my-monads
+    , mtl ==2.2.*
+    , transformers ==0.5.*
   default-language: Haskell2010

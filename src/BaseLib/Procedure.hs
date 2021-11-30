@@ -4,10 +4,9 @@ module BaseLib.Procedure
 where
 
 import Control.Monad
-import Control.Monad.Cont.Class
-import Control.Monad.Except.Class
-import Control.Monad.IO.Class
-import Control.Monad.State.Class
+import Control.Monad.Cont
+import Control.Monad.Except
+import Control.Monad.State
 import Data.Fixed
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))

@@ -10,18 +10,18 @@ module Lib
 where
 
 import BaseLib.Procedure
-import Control.Monad.Except.Class
-import Control.Monad.IO.Class
-import Control.Monad.Parser.Class
-import Control.Monad.Trans.Parser
+import Control.Monad.Except
+import Control.Monad.Parser
 import Data.Functor.Identity (Identity (runIdentity))
-import Data.Stream (LineStream, ListStream (ListStream), Stream (Pos), makeLineStream)
+import Data.Stream (Stream (Pos))
+import Data.Stream.StringLines (StringLines (..))
 import Datum (Datum, datum)
 import Expand
+import ListStream (ListStream (..))
 import Syntax
 import TreeWalker
 
-type LineParseError = ParseError (Pos LineStream)
+type LineParseError = ParseError (Pos StringLines)
 
 data StrEvalError
   = CantParse LineParseError
@@ -39,7 +39,7 @@ doExpand tokens k = do
 
 parseAst :: String -> (StrEvalResult Program -> Eval r) -> Eval r
 parseAst s k =
-  case runIdentity $ runParserT (many datum <* eof) $ makeLineStream s of
+  case runStringParser (many datum <* eof) s of
     NoParse e -> k $ Left $ CantParse e
     Parsed v _ _ -> doExpand v expand
   where

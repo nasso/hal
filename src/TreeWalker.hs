@@ -24,11 +24,10 @@ module TreeWalker
 where
 
 import Control.Monad
-import Control.Monad.IO.Class
-import Control.Monad.Trans.Cont
-import Control.Monad.Trans.Except
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.State
+import Control.Monad.Cont
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.State
 import Data.Functor
 import Data.List.NonEmpty (NonEmpty (..))
 import Data.Map.Strict (Map)
