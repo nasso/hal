@@ -1,10 +1,10 @@
 name: hal
 version: 0.1.0.0
-github: "githubuser/hal"
+github: nasso/hal
 license: BSD3
-author: "Author name here"
-maintainer: "example@example.com"
-copyright: "2021 Author name here"
+author: nasso
+maintainer: nasso <nassomails@gmail.com>
+copyright: (c) 2021 nasso
 
 extra-source-files:
   - README.md
@@ -21,11 +21,11 @@ description:
   Please see the README on GitHub at <https://github.com/githubuser/hal#readme>
 
 dependencies:
-  - base >= 4.9 && < 5
-  - containers >= 0.6 && < 0.7
+  - base == 4.14.*
+  - containers == 0.6.*
   - mtl == 2.2.*
   - transformers == 0.5.*
-  - comparse
+  - comparse == 0.1.*
 
 library:
   source-dirs: src

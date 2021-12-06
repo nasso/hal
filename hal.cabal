@@ -4,16 +4,16 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c101e8b5959be1b92978ab1fa0105824cf925a92b1bd1b1f133fe9755e8dfac2
+-- hash: 9e1629bd5d68c3a25a6acf18b09bf7475dc9853c05a266b462cbf0ea701baef4
 
 name:           hal
 version:        0.1.0.0
 description:    Please see the README on GitHub at <https://github.com/githubuser/hal#readme>
-homepage:       https://github.com/githubuser/hal#readme
-bug-reports:    https://github.com/githubuser/hal/issues
-author:         Author name here
-maintainer:     example@example.com
-copyright:      2021 Author name here
+homepage:       https://github.com/nasso/hal#readme
+bug-reports:    https://github.com/nasso/hal/issues
+author:         nasso
+maintainer:     nasso <nassomails@gmail.com>
+copyright:      2021 nasso
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -23,7 +23,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/hal
+  location: https://github.com/nasso/hal
 
 library
   exposed-modules:
@@ -42,8 +42,8 @@ library
       src
   ghc-options: -Wall
   build-depends:
-      base >=4.9 && <5
-    , comparse
+      base ==4.14.*
+    , comparse ==0.1.*
     , containers ==0.6.*
     , mtl ==2.2.*
     , transformers ==0.5.*
@@ -57,8 +57,8 @@ executable hal
       app
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.9 && <5
-    , comparse
+      base ==4.14.*
+    , comparse ==0.1.*
     , containers ==0.6.*
     , hal
     , mtl ==2.2.*
@@ -75,8 +75,8 @@ test-suite hal-test
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
-    , base >=4.9 && <5
-    , comparse
+    , base ==4.14.*
+    , comparse ==0.1.*
     , containers ==0.6.*
     , hal
     , mtl ==2.2.*
