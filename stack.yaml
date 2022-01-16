@@ -43,7 +43,9 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-  - comparse-0.1.0.0@sha256:78456a22a0b1a0616bd90a884a8350260d365d49d8ef434d5c8ecbe83de59600,1610
+  - text-2.0
+  - git: https://github.com/nasso/comparse.git
+    commit: 37213a873b18ee5726d38296298415f954259088
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

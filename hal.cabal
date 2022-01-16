@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 9e1629bd5d68c3a25a6acf18b09bf7475dc9853c05a266b462cbf0ea701baef4
+-- hash: 1ceaa7f47fa07cf07c3177beca68fca38fb7d5def2b0c5f844633c8cf3c96376
 
 name:           hal
 version:        0.1.0.0
@@ -13,7 +13,7 @@ homepage:       https://github.com/nasso/hal#readme
 bug-reports:    https://github.com/nasso/hal/issues
 author:         nasso
 maintainer:     nasso <nassomails@gmail.com>
-copyright:      2021 nasso
+copyright:      (c) 2021 nasso
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -43,7 +43,7 @@ library
   ghc-options: -Wall
   build-depends:
       base ==4.14.*
-    , comparse ==0.1.*
+    , comparse ==0.2.*
     , containers ==0.6.*
     , mtl ==2.2.*
     , transformers ==0.5.*
@@ -58,25 +58,7 @@ executable hal
   ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base ==4.14.*
-    , comparse ==0.1.*
-    , containers ==0.6.*
-    , hal
-    , mtl ==2.2.*
-    , transformers ==0.5.*
-  default-language: Haskell2010
-
-test-suite hal-test
-  type: exitcode-stdio-1.0
-  main-is: Spec.hs
-  other-modules:
-      Paths_hal
-  hs-source-dirs:
-      test
-  ghc-options: -Wall -threaded -rtsopts -with-rtsopts=-N
-  build-depends:
-      QuickCheck
-    , base ==4.14.*
-    , comparse ==0.1.*
+    , comparse ==0.2.*
     , containers ==0.6.*
     , hal
     , mtl ==2.2.*

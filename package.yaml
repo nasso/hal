@@ -25,7 +25,7 @@ dependencies:
   - containers == 0.6.*
   - mtl == 2.2.*
   - transformers == 0.5.*
-  - comparse == 0.1.*
+  - comparse == 0.2.*
 
 library:
   source-dirs: src
@@ -43,16 +43,3 @@ executables:
       - -with-rtsopts=-N
     dependencies:
       - hal
-
-tests:
-  hal-test:
-    main: Spec.hs
-    source-dirs: test
-    ghc-options:
-      - -Wall
-      - -threaded
-      - -rtsopts
-      - -with-rtsopts=-N
-    dependencies:
-      - hal
-      - QuickCheck

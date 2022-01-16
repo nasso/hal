@@ -5,15 +5,26 @@
 
 packages:
 - completed:
-    hackage: comparse-0.1.0.0@sha256:78456a22a0b1a0616bd90a884a8350260d365d49d8ef434d5c8ecbe83de59600,1610
+    hackage: text-2.0@sha256:86e64bc76fefb8f0f6529d28ddf24b2a29d43591a8b9b7c7094f481a0db2fb7d,7788
     pantry-tree:
-      size: 921
-      sha256: 53cf474cc656dfe4ffc114fcc12b71c687c03c6839e0497539f88fb4ecfb013c
+      size: 7364
+      sha256: 894b84358fbad3cb8c16f224d3d8b7a1d7b6bcae68cda5a9998dd964904a6560
   original:
-    hackage: comparse-0.1.0.0@sha256:78456a22a0b1a0616bd90a884a8350260d365d49d8ef434d5c8ecbe83de59600,1610
+    hackage: text-2.0
+- completed:
+    name: comparse
+    version: 0.2.0.0
+    git: https://github.com/nasso/comparse.git
+    pantry-tree:
+      size: 1481
+      sha256: 68210b59ba74236059eb24f74ab515de46a812a768da0543af7869658de28e79
+    commit: 37213a873b18ee5726d38296298415f954259088
+  original:
+    git: https://github.com/nasso/comparse.git
+    commit: 37213a873b18ee5726d38296298415f954259088
 snapshots:
 - completed:
-    size: 587546
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/10.yaml
-    sha256: 88b4f81e162ba3adc230a9fcccc4d19ac116377656bab56c7382ca88598b257a
-  original: lts-18.10
+    size: 586110
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/21.yaml
+    sha256: ce4fb8d44f3c6c6032060a02e0ebb1bd29937c9a70101c1517b92a87d9515160
+  original: lts-18.21
