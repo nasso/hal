@@ -12,16 +12,12 @@ packages:
   original:
     hackage: text-2.0
 - completed:
-    name: comparse
-    version: 0.2.0.0
-    git: https://github.com/nasso/comparse.git
+    hackage: comparse-0.2.0.0@sha256:b3180d09805f9aa22b9416e476f4b8a5a6bde9fbdcb676b156e0b6b5dfd34e4c,1745
     pantry-tree:
-      size: 1481
-      sha256: 7f58789d951e98af770a950f33efc049ac5184ece526dfd488e3e7da81f5db6e
-    commit: 4ca7112ee4351cac2b9e44f86991d2dcfc984aea
+      size: 1050
+      sha256: 56825343690659ce4aa46a6f4457ec2e6c7067e888683f0eb4b3d926fef6a9b4
   original:
-    git: https://github.com/nasso/comparse.git
-    commit: 4ca7112ee4351cac2b9e44f86991d2dcfc984aea
+    hackage: comparse-0.2.0.0
 snapshots:
 - completed:
     size: 586110
