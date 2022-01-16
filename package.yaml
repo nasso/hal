@@ -26,6 +26,7 @@ dependencies:
   - mtl == 2.2.*
   - transformers == 0.5.*
   - comparse == 0.2.*
+  - text == 2.0.*
 
 library:
   source-dirs: src

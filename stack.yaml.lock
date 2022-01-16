@@ -17,11 +17,11 @@ packages:
     git: https://github.com/nasso/comparse.git
     pantry-tree:
       size: 1481
-      sha256: 68210b59ba74236059eb24f74ab515de46a812a768da0543af7869658de28e79
-    commit: 37213a873b18ee5726d38296298415f954259088
+      sha256: 7f58789d951e98af770a950f33efc049ac5184ece526dfd488e3e7da81f5db6e
+    commit: 4ca7112ee4351cac2b9e44f86991d2dcfc984aea
   original:
     git: https://github.com/nasso/comparse.git
-    commit: 37213a873b18ee5726d38296298415f954259088
+    commit: 4ca7112ee4351cac2b9e44f86991d2dcfc984aea
 snapshots:
 - completed:
     size: 586110

@@ -45,7 +45,7 @@ packages:
 extra-deps:
   - text-2.0
   - git: https://github.com/nasso/comparse.git
-    commit: 37213a873b18ee5726d38296298415f954259088
+    commit: 4ca7112ee4351cac2b9e44f86991d2dcfc984aea
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

@@ -4,7 +4,7 @@ import Control.Monad
 import Control.Monad.Cont
 import Control.Monad.Except
 import Control.Monad.Parser (ParseError (ParseError))
-import Data.Stream.StringLines (StringPos (..))
+import Data.Stream.TextLines (TextPos (TextPos))
 import Lib
 import System.Environment (getArgs, getProgName)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -80,18 +80,17 @@ repl getln prev =
    in contLine prev >>= \line ->
         withStr' line (printLoop (repl getln) line) `catchError` displayError
 
-printLoop :: (String -> Eval ()) -> String -> StrEvalResult [Value] -> Eval ()
+printLoop :: (String -> Eval ()) -> String -> EvalResult [Value] -> Eval ()
 printLoop loop _ (Right vs) = liftIO (displayAll vs) >> loop ""
 printLoop _ _ (Left (SyntaxError err)) = throwError err
 printLoop loop s (Left (CantParse e@(ParseError p _)))
-  | p == eol = loop s
+  | isAtEnd p = loop s
   | otherwise = throwError $ show e
   where
     allLines = lines s
-    lastLine = last allLines
     lastLineNum = length allLines - 1
-    lastLineCol = length lastLine
-    eol = StringPos lastLineNum lastLineCol lastLine
+    lastLineCol = length $ last allLines
+    isAtEnd (TextPos l c _) = l == lastLineNum && c == lastLineCol
 
 displayAll :: [Value] -> IO ()
 displayAll (Void : vs') = displayAll vs'

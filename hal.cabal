@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1ceaa7f47fa07cf07c3177beca68fca38fb7d5def2b0c5f844633c8cf3c96376
+-- hash: 2f94c74a5a1c07343240eec7f1a355ee834d4bff4a67f8d511ef69a7e088e7d9
 
 name:           hal
 version:        0.1.0.0
@@ -46,6 +46,7 @@ library
     , comparse ==0.2.*
     , containers ==0.6.*
     , mtl ==2.2.*
+    , text ==2.0.*
     , transformers ==0.5.*
   default-language: Haskell2010
 
@@ -62,5 +63,6 @@ executable hal
     , containers ==0.6.*
     , hal
     , mtl ==2.2.*
+    , text ==2.0.*
     , transformers ==0.5.*
   default-language: Haskell2010

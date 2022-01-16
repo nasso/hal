@@ -1,6 +1,6 @@
 module Lib
-  ( StrEvalResult,
-    StrEvalError (..),
+  ( EvalResult,
+    EvalError (..),
     withBaseLib,
     withStr,
     withStr',
@@ -14,32 +14,33 @@ import Control.Monad.Except
 import Control.Monad.Parser
 import Data.Functor.Identity (Identity (runIdentity))
 import Data.Stream (Stream (Pos))
-import Data.Stream.StringLines (StringLines (..))
+import Data.Stream.TextLines (TextLines (..))
+import qualified Data.Text as T
 import Datum (Datum, datum)
 import Expand
 import ListStream (ListStream (..))
 import Syntax
 import TreeWalker
 
-type LineParseError = ParseError (Pos StringLines)
+type LineParseError = ParseError (Pos TextLines)
 
-data StrEvalError
+data EvalError
   = CantParse LineParseError
   | SyntaxError String
   deriving (Show)
 
-type StrEvalResult a = Either StrEvalError a
+type EvalResult a = Either EvalError a
 
-doExpand :: [Datum] -> (StrEvalResult [Datum] -> Eval r) -> Eval r
+doExpand :: [Datum] -> (EvalResult [Datum] -> Eval r) -> Eval r
 doExpand tokens k = do
   ctx <- getExpandCtx
   case runExpand (expandProgram tokens) ctx of
     Left err -> k $ Left $ SyntaxError err
     Right (ast, ctx') -> withExpandCtx ctx' $ k $ Right ast
 
-parseAst :: String -> (StrEvalResult Program -> Eval r) -> Eval r
+parseAst :: String -> (EvalResult Program -> Eval r) -> Eval r
 parseAst s k =
-  case runStringParser (many datum <* eof) s of
+  case runTextParser (many datum <* eof) $ T.pack s of
     NoParse e -> k $ Left $ CantParse e
     Parsed v _ _ -> doExpand v expand
   where
@@ -49,7 +50,7 @@ parseAst s k =
         NoParse e -> k $ Left $ SyntaxError $ show e
         Parsed ast _ _ -> k $ Right ast
 
-withStr' :: String -> (StrEvalResult [Value] -> Eval ()) -> Eval ()
+withStr' :: String -> (EvalResult [Value] -> Eval ()) -> Eval ()
 withStr' s k = parseAst s go
   where
     go (Left e) = k $ Left e
